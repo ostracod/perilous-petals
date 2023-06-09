@@ -1,0 +1,7 @@
+{
+    "gameName": "Perilous Petals",
+    "author": "Jack Eisenmann",
+    "port": 2635,
+    "welcomeViewFile": "welcome.html",
+    "stylesheets": []
+}
