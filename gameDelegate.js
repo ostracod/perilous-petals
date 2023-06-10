@@ -11,6 +11,11 @@ class Pos {
         this.y = y;
     }
     
+    add(pos) {
+        this.x += pos.x;
+        this.y += pos.y;
+    }
+    
     toJson() {
         return { x: this.x, y: this.y };
     }
@@ -48,6 +53,11 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
         commandName: "setState",
         players: playerTiles.map((tile) => tile.toClientJson()),
     });
+});
+
+gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => {
+    const playerTile = playerTileMap.get(player.username);
+    playerTile.pos.add(command.offset);
 });
 
 class GameDelegate {
