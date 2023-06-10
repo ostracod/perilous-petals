@@ -1,4 +1,39 @@
 
+const pixelScale = 6;
+
+let localPlayerUsername;
+let playerTiles = [];
+let localPlayerTile = null;
+
+class Tile {
+    
+}
+
+class PlayerTile {
+    
+    constructor(username, pos) {
+        this.username = username;
+        this.pos = pos;
+        playerTiles.push(this);
+        if (this.username === localPlayerUsername) {
+            localPlayerTile = this;
+        }
+    }
+    
+    draw() {
+        playerSprite.draw(context, pixelScale, this.pos);
+    }
+}
+
+addCommandListener("setState", (command) => {
+    playerTiles = [];
+    localPlayerTile = null;
+    for (const playerData of command.players) {
+        const pos = createPosFromJson(playerData.pos);
+        new PlayerTile(playerData.username, pos);
+    }
+});
+
 class ClientDelegate {
     
     constructor() {
@@ -10,27 +45,19 @@ class ClientDelegate {
     }
     
     setLocalPlayerInfo(command) {
-        
+        localPlayerUsername = command.username;
     }
     
     addCommandsBeforeUpdateRequest() {
-        
+        gameUpdateCommandList.push({
+            commandName: "getState",
+        });
     }
     
     timerEvent() {
         clearCanvas();
-        const size = 26;
-        for (let posY = 0; posY < size; posY += 1) {
-            for (let posX = 0; posX < size; posX += 1) {
-                if (Math.random() < 0.3) {
-                    testSprite.draw(
-                        context, 6,
-                        new Pos(posX, posY),
-                        Math.floor(Math.random() * 2),
-                        Math.random() > 0.5,
-                    );
-                }
-            }
+        for (const playerTile of playerTiles) {
+            playerTile.draw();
         }
     }
     

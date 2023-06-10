@@ -97,11 +97,7 @@ class Sprite {
     }
 }
 
-const testPalettes = [
-    [new Color(128, 0, 0), new Color(255, 0, 0)],
-    [new Color(0, 128, 0), new Color(0, 255, 0)],
-];
-const testSprite = new Sprite(1, testPalettes, true);
+const playerSprite = new Sprite(0, [[new Color(0, 0, 0), new Color(255, 255, 255)]], true);
 
 const initializeSpriteSheet = (done) => {
     
