@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  express:
+    specifier: ^4.17.1
+    version: 4.18.2
   ostracod-multiplayer:
     specifier: github:ostracod/ostracod-multiplayer#semver:^1.5.0
     version: github.com/ostracod/ostracod-multiplayer/6fdc9015e2dff0aabbf4a29efe19f3b0e01376c5

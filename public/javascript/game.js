@@ -1,7 +1,8 @@
 
 const pixelScale = 6;
-const worldSize = 26;
 
+let worldSize;
+let tierAmount;
 let localPlayerUsername;
 let playerTiles = [];
 let localPlayerTile = null;
@@ -76,6 +77,21 @@ addCommandRepeater("walk", (command) => {
     localPlayerTile.pos.add(command.offset);
 });
 
+class ConstantsRequest extends AjaxRequest {
+    
+    constructor(callback) {
+        super("gameConstants", {}, null);
+        this.callback = callback;
+    }
+    
+    respond(data) {
+        super.respond(data);
+        worldSize = data.worldSize;
+        tierAmount = data.tierAmount;
+        this.callback();
+    }
+}
+
 class ClientDelegate {
     
     constructor() {
@@ -83,7 +99,9 @@ class ClientDelegate {
     }
     
     initialize(done) {
-        initializeSpriteSheet(done);
+        new ConstantsRequest(() => {
+            initializeSpriteSheet(done);
+        });
     }
     
     setLocalPlayerInfo(command) {

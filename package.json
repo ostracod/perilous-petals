@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "type": "module",
     "dependencies": {
+        "express": "^4.17.1",
         "ostracod-multiplayer": "github:ostracod/ostracod-multiplayer#semver:^1.5.0"
     }
 }
