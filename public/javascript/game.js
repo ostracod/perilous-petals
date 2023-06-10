@@ -3,7 +3,16 @@ const pixelScale = 6;
 
 let worldSize;
 let tierAmount;
+let grassTextureAmount;
+let tileTypeIds;
+let startTileChar;
+
 let localPlayerUsername;
+let foregroundTiles = null;
+let backgroundTiles = null;
+let lastWorldChangeId = null;
+const grassTiles = [];
+const blockTiles = [];
 let playerTiles = [];
 let localPlayerTile = null;
 const walkOffset = new Pos(0, 0);
@@ -12,12 +21,62 @@ let firstStepDelay = 0;
 let standDelay = 0;
 
 class Tile {
-    
+    // Concrete subclasses of Tile must implement these methods:
+    // isForeground, getSprite
 }
 
-class PlayerTile {
+class ForegroundTile extends Tile {
+    
+    isForeground() {
+        return true;
+    }
+}
+
+class BackgroundTile extends Tile {
+    
+    isForeground() {
+        return false;
+    }
+}
+
+class EmptyTile extends BackgroundTile {
+    
+    getSprite() {
+        return null;
+    }
+}
+
+const emptyTile = new EmptyTile();
+
+class GrassTile extends BackgroundTile {
+    
+    constructor(texture) {
+        super();
+        this.texture = texture;
+    }
+    
+    getSprite() {
+        return grassSprite;
+    }
+}
+
+class BlockTile extends ForegroundTile {
+    
+    constructor(tier) {
+        super();
+        this.tier = tier;
+    }
+    
+    getSprite() {
+        return blockSprite;
+    }
+}
+
+// TODO: PlayerTile should be stored in foregroundTiles.
+class PlayerTile extends ForegroundTile {
     
     constructor(username, pos) {
+        super();
         this.username = username;
         this.pos = pos;
         playerTiles.push(this);
@@ -26,10 +85,25 @@ class PlayerTile {
         }
     }
     
+    getSprite() {
+        return playerSprite;
+    }
+    
     draw() {
-        playerSprite.draw(context, pixelScale, this.pos);
+        this.getSprite().draw(context, pixelScale, this.pos);
     }
 }
+
+const initializeTiles = () => {
+    while (grassTiles.length < grassTextureAmount) {
+        const tile = new GrassTile(grassTiles.length);
+        grassTiles.push(tile);
+    }
+    while (blockTiles.length < tierAmount) {
+        const tile = new BlockTile(blockTiles.length);
+        blockTiles.push(tile);
+    }
+};
 
 const tryWalk = () => {
     if ((walkOffset.x === 0 && walkOffset.y === 0)
@@ -50,7 +124,7 @@ const tryWalk = () => {
 };
 
 const actInDirection = (offset) => {
-    if (standDelay > 4) {
+    if (standDelay > 3) {
         firstStepDelay = 9;
     }
     walkOffset.set(offset);
@@ -64,6 +138,61 @@ const stopWalk = (offset) => {
     }
 };
 
+const convertTypeIdToTile = (typeId) => {
+    if (typeId === tileTypeIds.empty) {
+        return emptyTile;
+    }
+    if (typeId >= tileTypeIds.grass && typeId < tileTypeIds.grass + grassTextureAmount) {
+        return grassTiles[typeId - tileTypeIds.grass];
+    }
+    if (typeId >= tileTypeIds.block && typeId < tileTypeIds.block + tierAmount) {
+        return blockTiles[typeId - tileTypeIds.block];
+    }
+    throw new Error(`Cannot convert type ID ${typeId} to a tile.`);
+};
+
+const setWorldTiles = (tileChars) => {
+    foregroundTiles = [];
+    backgroundTiles = [];
+    for (let index = 0; index < tileChars.length; index++) {
+        const charCode = tileChars.charCodeAt(index);
+        const tile = convertTypeIdToTile(charCode - startTileChar);
+        let tiles1;
+        let tiles2;
+        if (tile.isForeground()) {
+            tiles1 = foregroundTiles;
+            tiles2 = backgroundTiles;
+        } else {
+            tiles1 = backgroundTiles;
+            tiles2 = foregroundTiles;
+        }
+        tiles1.push(tile);
+        tiles2.push(emptyTile);
+    }
+};
+
+const drawWorldTiles = () => {
+    let index = 0;
+    const pos = new Pos(0, 0);
+    while (pos.y < worldSize) {
+        const foregroundTile = foregroundTiles[index];
+        let sprite = foregroundTile.getSprite();
+        if (sprite === null) {
+            const backgroundTile = backgroundTiles[index];
+            sprite = backgroundTile.getSprite();
+        }
+        if (sprite !== null) {
+            sprite.draw(context, pixelScale, pos);
+        }
+        index += 1;
+        pos.x += 1;
+        if (pos.x >= worldSize) {
+            pos.x = 0;
+            pos.y += 1;
+        }
+    }
+};
+
 addCommandListener("setState", (command) => {
     playerTiles = [];
     localPlayerTile = null;
@@ -71,6 +200,11 @@ addCommandListener("setState", (command) => {
         const pos = createPosFromJson(playerData.pos);
         new PlayerTile(playerData.username, pos);
     }
+    const tileChars = command.worldTiles;
+    if (typeof tileChars !== "undefined") {
+        setWorldTiles(tileChars);
+    }
+    lastWorldChangeId = command.lastWorldChangeId;
 });
 
 addCommandRepeater("walk", (command) => {
@@ -88,6 +222,9 @@ class ConstantsRequest extends AjaxRequest {
         super.respond(data);
         worldSize = data.worldSize;
         tierAmount = data.tierAmount;
+        grassTextureAmount = data.grassTextureAmount;
+        tileTypeIds = data.tileTypeIds;
+        startTileChar = data.startTileChar;
         this.callback();
     }
 }
@@ -100,6 +237,7 @@ class ClientDelegate {
     
     initialize(done) {
         new ConstantsRequest(() => {
+            initializeTiles();
             initializeSpriteSheet(done);
         });
     }
@@ -111,6 +249,7 @@ class ClientDelegate {
     addCommandsBeforeUpdateRequest() {
         gameUpdateCommandList.push({
             commandName: "getState",
+            lastWorldChangeId,
         });
     }
     
@@ -126,6 +265,7 @@ class ClientDelegate {
             tryWalk();
         }
         clearCanvas();
+        drawWorldTiles();
         for (const playerTile of playerTiles) {
             playerTile.draw();
         }

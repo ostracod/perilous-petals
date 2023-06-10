@@ -1,10 +1,13 @@
 
 import * as fs from "fs";
 import { gameUtils } from "ostracod-multiplayer";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount } from "./constants.js";
+import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, tileTypeIds, startTileChar } from "./constants.js";
+
+const worldTilesLength = worldSize ** 2;
 
 let foregroundTiles;
 let backgroundTiles;
+let lastWorldChangeId = 0;
 // Map from username to PlayerTile.
 const playerTileMap = new Map();
 
@@ -27,10 +30,14 @@ class Pos {
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
-    // toDbJson
+    // getTypeId, toDbJson
 }
 
 class EmptyTile extends Tile {
+    
+    getTypeId() {
+        return tileTypeIds.empty;
+    }
     
     toDbJson() {
         return null;
@@ -44,6 +51,10 @@ class GrassTile extends Tile {
     constructor(texture) {
         super();
         this.texture = texture;
+    }
+    
+    getTypeId() {
+        return tileTypeIds.grass + this.texture;
     }
     
     toDbJson() {
@@ -62,6 +73,10 @@ class BlockTile extends Tile {
     constructor(tier) {
         super();
         this.tier = tier;
+    }
+    
+    getTypeId() {
+        return tileTypeIds.block + this.tier;
     }
     
     toDbJson() {
@@ -117,8 +132,7 @@ const convertJsonToTile = (data) => {
 const createWorldTiles = () => {
     foregroundTiles = [];
     backgroundTiles = [];
-    const tileAmount = worldSize ** 2;
-    for (let index = 0; index < tileAmount; index++) {
+    for (let index = 0; index < worldTilesLength; index++) {
         foregroundTiles.push((Math.random() < 0.05) ? grassTiles[0] : emptyTile);
         backgroundTiles.push((Math.random() < 0.05) ? blockTiles[0] : emptyTile);
     }
@@ -138,6 +152,19 @@ const writeWorldTiles = () => {
     fs.writeFileSync(worldTilesPath, JSON.stringify(data));
 };
 
+const encodeWorldTiles = () => {
+    const chars = [];
+    for (let index = 0; index < worldTilesLength; index++) {
+        let tile = foregroundTiles[index];
+        if (tile instanceof EmptyTile) {
+            tile = backgroundTiles[index];
+        }
+        const typeId = tile.getTypeId();
+        chars.push(String.fromCharCode(typeId + startTileChar));
+    }
+    return chars.join("");
+};
+
 if (fs.existsSync(worldTilesPath)) {
     readWorldTiles();
 } else {
@@ -146,10 +173,18 @@ if (fs.existsSync(worldTilesPath)) {
 
 gameUtils.addCommandListener("getState", true, (command, player, outputCommands) => {
     const playerTiles = Array.from(playerTileMap.values());
-    outputCommands.push({
+    const outputCommand = {
         commandName: "setState",
         players: playerTiles.map((tile) => tile.toClientJson()),
-    });
+        lastWorldChangeId,
+    };
+    if (command.lastWorldChangeId === null) {
+        outputCommand.worldTiles = encodeWorldTiles();
+    } else {
+        // TODO: Send world changes to the client.
+        
+    }
+    outputCommands.push(outputCommand);
 });
 
 gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => {

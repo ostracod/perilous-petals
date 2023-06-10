@@ -97,7 +97,10 @@ class Sprite {
     }
 }
 
-const playerSprite = new Sprite(0, [[new Color(0, 0, 0), new Color(255, 255, 255)]], true);
+const dummyPalette = [new Color(0, 0, 0), new Color(255, 255, 255)];
+const grassSprite = new Sprite(32, [dummyPalette], false);
+const blockSprite = new Sprite(24, [dummyPalette], false);
+const playerSprite = new Sprite(0, [dummyPalette], true);
 
 const initializeSpriteSheet = (done) => {
     
