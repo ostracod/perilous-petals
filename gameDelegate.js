@@ -37,6 +37,8 @@ class Pos {
     }
 }
 
+const createPosFromJson = (data) => new Pos(data.x, data.y);
+
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
     // getTypeId, toDbJson
@@ -308,6 +310,18 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
 gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
     playerTile.walk(command.offset);
+});
+
+gameUtils.addCommandListener("placeTile", true, (command, player, outputCommands) => {
+    // TODO: Verify action.
+    const pos = createPosFromJson(command.pos);
+    setForegroundTile(pos, blockTiles[0]);
+});
+
+gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
+    // TODO: Verify action.
+    const pos = createPosFromJson(command.pos);
+    setForegroundTile(pos, emptyTile);
 });
 
 class GameDelegate {

@@ -24,8 +24,8 @@ let playerTiles = [];
 let localPlayerTile = null;
 const walkOffset = new Pos(0, 0);
 let walkDelay = 0;
+let isFirstStep = false;
 let firstStepDelay = 0;
-let standDelay = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -163,6 +163,10 @@ const tryWalk = () => {
     if (!hasWalked) {
         return;
     }
+    if (isFirstStep) {
+        firstStepDelay = 9;
+        isFirstStep = false;
+    }
     gameUpdateCommandList.push({
         commandName: "walk",
         offset: walkOffset.copy().toJson(),
@@ -170,12 +174,44 @@ const tryWalk = () => {
     walkDelay = 3;
 };
 
-const actInDirection = (offset) => {
-    if (standDelay > 3) {
-        firstStepDelay = 9;
+const startWalk = (offset) => {
+    if (offset.equals(walkOffset)) {
+        return;
     }
+    isFirstStep = true;
+    firstStepDelay = 0;
     walkOffset.set(offset);
     tryWalk();
+};
+
+const buildInDirection = (offset) => {
+    const pos = localPlayerTile.pos.copy();
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const tile = getForegroundTile(pos);
+    if (tile instanceof BlockTile) {
+        setForegroundTile(pos, emptyTile);
+        gameUpdateCommandList.push({
+            commandName: "removeTile",
+            pos: pos.copy().toJson(),
+        });
+    } else if (tile instanceof EmptyTile) {
+        setForegroundTile(pos, blockTiles[0]);
+        gameUpdateCommandList.push({
+            commandName: "placeTile",
+            pos: pos.copy().toJson(),
+        });
+    }
+};
+
+const actInDirection = (offset) => {
+    if (shiftKeyIsHeld) {
+        buildInDirection(offset);
+    } else {
+        startWalk(offset);
+    }
 };
 
 const stopWalk = (offset) => {
@@ -318,11 +354,6 @@ class ClientDelegate {
         }
         walkDelay -= 1;
         firstStepDelay -= 1;
-        if (walkOffset.x === 0 && walkOffset.y === 0) {
-            standDelay += 1;
-        } else {
-            standDelay = 0;
-        }
         if (firstStepDelay <= 0) {
             tryWalk();
         }
@@ -334,7 +365,7 @@ class ClientDelegate {
     }
     
     keyDownEvent(keyCode) {
-        if (focusedTextInput !== null) {
+        if (!hasLoadedTiles || focusedTextInput !== null) {
             return true;
         }
         if (keyCode === 65 || keyCode === 37) {
@@ -353,6 +384,9 @@ class ClientDelegate {
     }
     
     keyUpEvent(keyCode) {
+        if (!hasLoadedTiles) {
+            return true;
+        }
         if (keyCode === 65 || keyCode === 37) {
             stopWalk(new Pos(-1, 0));
         }
