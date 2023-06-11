@@ -5,8 +5,8 @@ import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, tileTypeIds,
 
 const worldTilesLength = worldSize ** 2;
 
-let foregroundTiles;
-let backgroundTiles;
+const foregroundTiles = Array(worldTilesLength).fill(null);
+const backgroundTiles = Array(worldTilesLength).fill(null);
 let lastWorldChangeId = 0;
 // Map from username to PlayerTile.
 const playerTileMap = new Map();
@@ -16,6 +16,15 @@ class Pos {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+    }
+    
+    copy() {
+        return new Pos(this.x, this.y);
+    }
+    
+    set(pos) {
+        this.x = pos.x;
+        this.y = pos.y;
     }
     
     add(pos) {
@@ -31,6 +40,18 @@ class Pos {
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
     // getTypeId, toDbJson
+    
+    addEvent(pos) {
+        // Do nothing.
+    }
+    
+    moveEvent(pos) {
+        // Do nothing.
+    }
+    
+    deleteEvent() {
+        // Do nothing.
+    }
 }
 
 class EmptyTile extends Tile {
@@ -95,13 +116,49 @@ class PlayerTile extends Tile {
     constructor(player) {
         super();
         this.player = player;
-        const { posX, posY } = this.player.extraFields;
-        this.pos = new Pos(posX ?? 0, posY ?? 0);
+        this.pos = null;
+    }
+    
+    addEvent(pos) {
+        super.addEvent(pos);
+        this.pos = pos.copy();
         playerTileMap.set(this.player.username, this);
     }
     
-    remove() {
+    moveEvent(pos) {
+        super.moveEvent(pos);
+        this.pos.set(pos);
+    }
+    
+    deleteEvent() {
+        super.deleteEvent();
         playerTileMap.delete(this.player.username);
+    }
+    
+    addToWorld() {
+        const { posX, posY } = this.player.extraFields;
+        const pos = new Pos(posX ?? 0, posY ?? 0);
+        setForegroundTile(pos, this);
+    }
+    
+    deleteFromWorld() {
+        setForegroundTile(this.pos, emptyTile);
+    }
+    
+    walk(offset) {
+        const nextPos = this.pos.copy();
+        nextPos.add(offset);
+        if (!posIsInWorld(nextPos)) {
+            return;
+        }
+        const nextTile = getForegroundTile(nextPos);
+        if (nextTile instanceof EmptyTile) {
+            swapForegroundTiles(this.pos, nextPos);
+        }
+    }
+    
+    getTypeId() {
+        return tileTypeIds.empty;
     }
     
     toDbJson() {
@@ -129,19 +186,80 @@ const convertJsonToTile = (data) => {
     throw new Error(`Unrecognized tile type "${type}".`);
 };
 
-const createWorldTiles = () => {
-    foregroundTiles = [];
-    backgroundTiles = [];
-    for (let index = 0; index < worldTilesLength; index++) {
-        foregroundTiles.push((Math.random() < 0.05) ? grassTiles[0] : emptyTile);
-        backgroundTiles.push((Math.random() < 0.05) ? blockTiles[0] : emptyTile);
+const posIsInWorld = (pos) => (
+    pos.x >= 0 && pos.x < worldSize && pos.y >= 0 && pos.y < worldSize
+);
+
+const getTileIndex = (pos) => pos.x + pos.y * worldSize;
+
+const getForegroundTile = (pos) => {
+    const index = getTileIndex(pos);
+    return foregroundTiles[index];
+};
+
+const getBackgroundTile = (pos) => {
+    const index = getTileIndex(pos);
+    return backgroundTiles[index];
+};
+
+const setTileHelper = (tiles, pos, tile) => {
+    const index = getTileIndex(pos);
+    const lastTile = tiles[index];
+    if (lastTile !== null) {
+        lastTile.deleteEvent();
     }
+    tiles[index] = tile;
+    tile.addEvent(pos);
+};
+
+const setForegroundTile = (pos, tile) => {
+    setTileHelper(foregroundTiles, pos, tile);
+};
+
+const setBackgroundTile = (pos, tile) => {
+    setTileHelper(backgroundTiles, pos, tile);
+};
+
+const swapForegroundTiles = (pos1, pos2) => {
+    const index1 = getTileIndex(pos1);
+    const index2 = getTileIndex(pos2);
+    const tile1 = foregroundTiles[index1];
+    const tile2 = foregroundTiles[index2];
+    foregroundTiles[index1] = tile2;
+    foregroundTiles[index2] = tile1;
+    tile1.moveEvent(pos2);
+    tile2.moveEvent(pos1);
+};
+
+const iterateWorldPos = (handle) => {
+    const pos = new Pos(0, 0);
+    for (let index = 0; index < worldTilesLength; index++) {
+        handle(pos, index);
+        pos.x += 1;
+        if (pos.x >= worldSize) {
+            pos.x = 0;
+            pos.y += 1;
+        }
+    }
+};
+
+const createWorldTiles = () => {
+    iterateWorldPos((pos) => {
+        const foregroundTile = (Math.random() < 0.05) ? blockTiles[0] : emptyTile;
+        const backgroundTile = (Math.random() < 0.05) ? grassTiles[0] : emptyTile;
+        setForegroundTile(pos, foregroundTile);
+        setBackgroundTile(pos, backgroundTile);
+    });
 };
 
 const readWorldTiles = () => {
     const data = JSON.parse(fs.readFileSync(worldTilesPath));
-    foregroundTiles = data.foreground.map(convertJsonToTile);
-    backgroundTiles = data.background.map(convertJsonToTile);
+    iterateWorldPos((pos, index) => {
+        const foregroundTile = convertJsonToTile(data.foreground[index]);
+        const backgroundTile = convertJsonToTile(data.background[index]);
+        setForegroundTile(pos, foregroundTile);
+        setBackgroundTile(pos, backgroundTile);
+    });
 };
 
 const writeWorldTiles = () => {
@@ -189,7 +307,7 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
 
 gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
-    playerTile.pos.add(command.offset);
+    playerTile.walk(command.offset);
 });
 
 class GameDelegate {
@@ -199,12 +317,13 @@ class GameDelegate {
     }
     
     playerEnterEvent(player) {
-        new PlayerTile(player);
+        const playerTile = new PlayerTile(player);
+        playerTile.addToWorld();
     }
     
     playerLeaveEvent(player) {
         const playerTile = playerTileMap.get(player.username);
-        playerTile.remove();
+        playerTile.deleteFromWorld();
     }
     
     async persistEvent() {

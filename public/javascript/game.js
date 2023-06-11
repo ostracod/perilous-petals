@@ -72,13 +72,13 @@ class BlockTile extends ForegroundTile {
     }
 }
 
-// TODO: PlayerTile should be stored in foregroundTiles.
 class PlayerTile extends ForegroundTile {
     
     constructor(username, pos) {
         super();
         this.username = username;
         this.pos = pos;
+        setForegroundTile(this.pos, this);
         playerTiles.push(this);
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
@@ -89,8 +89,21 @@ class PlayerTile extends ForegroundTile {
         return playerSprite;
     }
     
-    draw() {
-        this.getSprite().draw(context, pixelScale, this.pos);
+    walk(offset) {
+        const nextPos = this.pos.copy();
+        nextPos.add(offset);
+        if (!posIsInWorld(nextPos)) {
+            return false;
+        }
+        const nextTile = getForegroundTile(nextPos);
+        if (nextTile instanceof EmptyTile) {
+            setForegroundTile(this.pos, emptyTile);
+            this.pos.set(nextPos);
+            setForegroundTile(this.pos, this);
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
@@ -105,17 +118,31 @@ const initializeTiles = () => {
     }
 };
 
+const posIsInWorld = (pos) => (
+    pos.x >= 0 && pos.x < worldSize && pos.y >= 0 && pos.y < worldSize
+);
+
+const getTileIndex = (pos) => pos.x + pos.y * worldSize;
+
+const getForegroundTile = (pos) => {
+    const index = getTileIndex(pos);
+    return foregroundTiles[index];
+};
+
+const setForegroundTile = (pos, tile) => {
+    const index = getTileIndex(pos);
+    foregroundTiles[index] = tile;
+};
+
 const tryWalk = () => {
     if ((walkOffset.x === 0 && walkOffset.y === 0)
             || localPlayerTile === null || walkDelay > 0) {
         return;
     }
-    const nextPos = localPlayerTile.pos.copy();
-    nextPos.add(walkOffset);
-    if (nextPos.x < 0 || nextPos.y < 0 || nextPos.x >= worldSize || nextPos.y >= worldSize) {
+    const hasWalked = localPlayerTile.walk(walkOffset);
+    if (!hasWalked) {
         return;
     }
-    localPlayerTile.pos.set(nextPos);
     gameUpdateCommandList.push({
         commandName: "walk",
         offset: walkOffset.copy().toJson(),
@@ -194,21 +221,25 @@ const drawWorldTiles = () => {
 };
 
 addCommandListener("setState", (command) => {
+    const tileChars = command.worldTiles;
+    if (typeof tileChars === "undefined") {
+        for (const playerTile of playerTiles) {
+            setForegroundTile(playerTile.pos, emptyTile);
+        }
+    } else {
+        setWorldTiles(tileChars);
+    }
     playerTiles = [];
     localPlayerTile = null;
     for (const playerData of command.players) {
         const pos = createPosFromJson(playerData.pos);
         new PlayerTile(playerData.username, pos);
     }
-    const tileChars = command.worldTiles;
-    if (typeof tileChars !== "undefined") {
-        setWorldTiles(tileChars);
-    }
     lastWorldChangeId = command.lastWorldChangeId;
 });
 
 addCommandRepeater("walk", (command) => {
-    localPlayerTile.pos.add(command.offset);
+    localPlayerTile.walk(command.offset);
 });
 
 class ConstantsRequest extends AjaxRequest {
@@ -254,6 +285,9 @@ class ClientDelegate {
     }
     
     timerEvent() {
+        if (foregroundTiles === null) {
+            return;
+        }
         walkDelay -= 1;
         firstStepDelay -= 1;
         if (walkOffset.x === 0 && walkOffset.y === 0) {
@@ -266,9 +300,6 @@ class ClientDelegate {
         }
         clearCanvas();
         drawWorldTiles();
-        for (const playerTile of playerTiles) {
-            playerTile.draw();
-        }
     }
     
     keyDownEvent(keyCode) {
