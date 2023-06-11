@@ -1,16 +1,23 @@
 
 const pixelScale = 6;
+const scaledSpriteSize = spriteSize * pixelScale;
 
 let worldSize;
+let worldPixelSize;
+let worldTilesLength;
 let tierAmount;
 let grassTextureAmount;
 let tileTypeIds;
 let startTileChar;
 
+let bufferCanvas;
+let bufferContext;
+let bufferCanvasHasChanged = false;
 let localPlayerUsername;
-let foregroundTiles = null;
-let backgroundTiles = null;
+let foregroundTiles;
+let backgroundTiles;
 let lastWorldChangeId = null;
+let hasLoadedTiles = false;
 const grassTiles = [];
 const blockTiles = [];
 let playerTiles = [];
@@ -132,6 +139,19 @@ const getForegroundTile = (pos) => {
 const setForegroundTile = (pos, tile) => {
     const index = getTileIndex(pos);
     foregroundTiles[index] = tile;
+    drawTile(pos);
+};
+
+const iterateWorldPos = (handle) => {
+    const pos = new Pos(0, 0);
+    for (let index = 0; index < worldTilesLength; index++) {
+        handle(pos, index);
+        pos.x += 1;
+        if (pos.x >= worldSize) {
+            pos.x = 0;
+            pos.y += 1;
+        }
+    }
 };
 
 const tryWalk = () => {
@@ -179,9 +199,7 @@ const convertTypeIdToTile = (typeId) => {
 };
 
 const setWorldTiles = (tileChars) => {
-    foregroundTiles = [];
-    backgroundTiles = [];
-    for (let index = 0; index < tileChars.length; index++) {
+    iterateWorldPos((pos, index) => {
         const charCode = tileChars.charCodeAt(index);
         const tile = convertTypeIdToTile(charCode - startTileChar);
         let tiles1;
@@ -193,31 +211,32 @@ const setWorldTiles = (tileChars) => {
             tiles1 = backgroundTiles;
             tiles2 = foregroundTiles;
         }
-        tiles1.push(tile);
-        tiles2.push(emptyTile);
-    }
+        tiles1[index] = tile;
+        tiles2[index] = emptyTile;
+        drawTile(pos);
+    });
 };
 
-const drawWorldTiles = () => {
-    let index = 0;
-    const pos = new Pos(0, 0);
-    while (pos.y < worldSize) {
-        const foregroundTile = foregroundTiles[index];
-        let sprite = foregroundTile.getSprite();
-        if (sprite === null) {
-            const backgroundTile = backgroundTiles[index];
-            sprite = backgroundTile.getSprite();
-        }
-        if (sprite !== null) {
-            sprite.draw(context, pixelScale, pos);
-        }
-        index += 1;
-        pos.x += 1;
-        if (pos.x >= worldSize) {
-            pos.x = 0;
-            pos.y += 1;
-        }
+const drawTile = (pos) => {
+    const index = getTileIndex(pos);
+    const foregroundTile = foregroundTiles[index];
+    let sprite = foregroundTile.getSprite();
+    if (sprite === null) {
+        const backgroundTile = backgroundTiles[index];
+        sprite = backgroundTile.getSprite();
     }
+    if (sprite === null) {
+        bufferContext.fillStyle = backgroundColorString;
+        bufferContext.fillRect(
+            pos.x * spriteSize,
+            pos.y * spriteSize,
+            spriteSize,
+            spriteSize,
+        );
+    } else {
+        sprite.draw(bufferContext, 1, pos);
+    }
+    bufferCanvasHasChanged = true;
 };
 
 addCommandListener("setState", (command) => {
@@ -228,6 +247,7 @@ addCommandListener("setState", (command) => {
         }
     } else {
         setWorldTiles(tileChars);
+        hasLoadedTiles = true;
     }
     playerTiles = [];
     localPlayerTile = null;
@@ -256,6 +276,10 @@ class ConstantsRequest extends AjaxRequest {
         grassTextureAmount = data.grassTextureAmount;
         tileTypeIds = data.tileTypeIds;
         startTileChar = data.startTileChar;
+        worldPixelSize = worldSize * spriteSize;
+        worldTilesLength = worldSize ** 2;
+        foregroundTiles = Array(worldTilesLength).fill(null);
+        backgroundTiles = Array(worldTilesLength).fill(null);
         this.callback();
     }
 }
@@ -268,6 +292,10 @@ class ClientDelegate {
     
     initialize(done) {
         new ConstantsRequest(() => {
+            bufferCanvas = document.createElement("canvas");
+            bufferCanvas.width = worldPixelSize;
+            bufferCanvas.height = worldPixelSize;
+            bufferContext = bufferCanvas.getContext("2d");
             initializeTiles();
             initializeSpriteSheet(done);
         });
@@ -285,7 +313,7 @@ class ClientDelegate {
     }
     
     timerEvent() {
-        if (foregroundTiles === null) {
+        if (!hasLoadedTiles) {
             return;
         }
         walkDelay -= 1;
@@ -298,8 +326,11 @@ class ClientDelegate {
         if (firstStepDelay <= 0) {
             tryWalk();
         }
-        clearCanvas();
-        drawWorldTiles();
+        if (bufferCanvasHasChanged) {
+            context.imageSmoothingEnabled = false;
+            context.drawImage(bufferCanvas, 0, 0, canvasWidth, canvasHeight);
+            bufferCanvasHasChanged = false;
+        }
     }
     
     keyDownEvent(keyCode) {

@@ -14,6 +14,8 @@ let spriteCanvas;
 let spriteContext;
 let spriteImageData;
 let spriteImageDataList;
+const backgroundColor = new Color(255, 255, 255);
+const backgroundColorString = backgroundColor.toString();
 
 class Sprite {
     
@@ -47,7 +49,7 @@ class Sprite {
                 } else if (colorR < 224) {
                     color = palette[1];
                 } else {
-                    color = null;
+                    color = backgroundColor;
                 }
                 index = (offsetX + offsetY * spriteSize) * 4;
                 if (color === null) {
