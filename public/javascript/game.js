@@ -326,7 +326,8 @@ addCommandListener("setState", (command) => {
     }
     const serverChanges = command.tileChanges;
     if (typeof serverChanges !== "undefined") {
-        for (const change of tileChanges) {
+        for (let index = tileChanges.length - 1; index >= 0; index--) {
+            const change = tileChanges[index];
             change.undo();
         }
         tileChanges = [];
