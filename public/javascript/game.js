@@ -18,6 +18,8 @@ let foregroundTiles;
 let backgroundTiles;
 let lastTileChangeId = null;
 let hasLoadedTiles = false;
+let tileChanges = [];
+let emptyTile;
 const grassTiles = [];
 const blockTiles = [];
 let playerTiles = [];
@@ -30,6 +32,10 @@ let firstStepDelay = 0;
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
     // isForeground, getSprite
+    
+    constructor(typeId) {
+        this.typeId = typeId;
+    }
 }
 
 class ForegroundTile extends Tile {
@@ -48,17 +54,19 @@ class BackgroundTile extends Tile {
 
 class EmptyTile extends BackgroundTile {
     
+    constructor() {
+        super(tileTypeIds.empty);
+    }
+    
     getSprite() {
         return null;
     }
 }
 
-const emptyTile = new EmptyTile();
-
 class GrassTile extends BackgroundTile {
     
     constructor(texture) {
-        super();
+        super(tileTypeIds.grass + texture);
         this.texture = texture;
     }
     
@@ -70,7 +78,7 @@ class GrassTile extends BackgroundTile {
 class BlockTile extends ForegroundTile {
     
     constructor(tier) {
-        super();
+        super(tileTypeIds.block + tier);
         this.tier = tier;
     }
     
@@ -81,8 +89,8 @@ class BlockTile extends ForegroundTile {
 
 class EntityTile extends ForegroundTile {
     
-    constructor(pos) {
-        super();
+    constructor(typeId, pos) {
+        super(typeId);
         this.pos = pos;
     }
 }
@@ -90,9 +98,9 @@ class EntityTile extends ForegroundTile {
 class PlayerTile extends EntityTile {
     
     constructor(username, pos) {
-        super(pos);
+        super(tileTypeIds.empty, pos);
         this.username = username;
-        setTile(true, this.pos, this);
+        setTile(true, this.pos, this, false);
         playerTiles.push(this);
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
@@ -111,9 +119,9 @@ class PlayerTile extends EntityTile {
         }
         const nextTile = getTile(true, nextPos);
         if (nextTile instanceof EmptyTile) {
-            setTile(true, this.pos, emptyTile);
+            setTile(true, this.pos, emptyTile, false);
             this.pos.set(nextPos);
-            setTile(true, this.pos, this);
+            setTile(true, this.pos, this, false);
             return true;
         } else {
             return false;
@@ -121,7 +129,23 @@ class PlayerTile extends EntityTile {
     }
 }
 
+class TileChange {
+    
+    constructor(isForeground, pos, lastTypeId) {
+        this.isForeground = isForeground;
+        this.pos = pos;
+        this.lastTypeId = lastTypeId;
+        tileChanges.push(this);
+    }
+    
+    undo() {
+        const tile = convertTypeIdToTile(this.lastTypeId)
+        setTile(this.isForeground, this.pos, tile, false);
+    }
+}
+
 const initializeTiles = () => {
+    emptyTile = new EmptyTile();
     while (grassTiles.length < grassTextureAmount) {
         const tile = new GrassTile(grassTiles.length);
         grassTiles.push(tile);
@@ -145,9 +169,14 @@ const getTile = (isForeground, pos) => {
     return getTiles(isForeground)[index];
 };
 
-const setTile = (isForeground, pos, tile) => {
+const setTile = (isForeground, pos, tile, recordChange = true) => {
     const index = getTileIndex(pos);
-    getTiles(isForeground)[index] = tile;
+    const tiles = getTiles(isForeground);
+    if (recordChange) {
+        const lastTile = tiles[index];
+        new TileChange(isForeground, pos.copy(), lastTile.typeId);
+    }
+    tiles[index] = tile;
     drawTile(pos);
 };
 
@@ -288,11 +317,24 @@ addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
         for (const playerTile of playerTiles) {
-            setTile(true, playerTile.pos, emptyTile);
+            setTile(true, playerTile.pos, emptyTile, false);
         }
     } else {
         setWorldTiles(tileChars);
         hasLoadedTiles = true;
+        tileChanges = [];
+    }
+    const serverChanges = command.tileChanges;
+    if (typeof serverChanges !== "undefined") {
+        for (const change of tileChanges) {
+            change.undo();
+        }
+        tileChanges = [];
+        for (const change of serverChanges) {
+            const pos = createPosFromJson(change.pos);
+            const tile = convertTypeIdToTile(change.typeId);
+            setTile(change.isForeground, pos, tile, false);
+        }
     }
     playerTiles = [];
     localPlayerTile = null;
@@ -305,6 +347,16 @@ addCommandListener("setState", (command) => {
 
 addCommandRepeater("walk", (command) => {
     localPlayerTile.walk(command.offset);
+});
+
+addCommandRepeater("removeTile", (command) => {
+    const pos = createPosFromJson(command.pos);
+    setTile(true, pos, emptyTile);
+});
+
+addCommandRepeater("placeTile", (command) => {
+    const pos = createPosFromJson(command.pos);
+    setTile(true, pos, blockTiles[0]);
 });
 
 class ConstantsRequest extends AjaxRequest {
