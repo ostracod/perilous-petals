@@ -16,7 +16,7 @@ let bufferCanvasHasChanged = false;
 let localPlayerUsername;
 let foregroundTiles;
 let backgroundTiles;
-let lastWorldChangeId = null;
+let lastTileChangeId = null;
 let hasLoadedTiles = false;
 const grassTiles = [];
 const blockTiles = [];
@@ -79,13 +79,20 @@ class BlockTile extends ForegroundTile {
     }
 }
 
-class PlayerTile extends ForegroundTile {
+class EntityTile extends ForegroundTile {
+    
+    constructor(pos) {
+        super();
+        this.pos = pos;
+    }
+}
+
+class PlayerTile extends EntityTile {
     
     constructor(username, pos) {
-        super();
+        super(pos);
         this.username = username;
-        this.pos = pos;
-        setForegroundTile(this.pos, this);
+        setTile(true, this.pos, this);
         playerTiles.push(this);
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
@@ -102,11 +109,11 @@ class PlayerTile extends ForegroundTile {
         if (!posIsInWorld(nextPos)) {
             return false;
         }
-        const nextTile = getForegroundTile(nextPos);
+        const nextTile = getTile(true, nextPos);
         if (nextTile instanceof EmptyTile) {
-            setForegroundTile(this.pos, emptyTile);
+            setTile(true, this.pos, emptyTile);
             this.pos.set(nextPos);
-            setForegroundTile(this.pos, this);
+            setTile(true, this.pos, this);
             return true;
         } else {
             return false;
@@ -131,14 +138,16 @@ const posIsInWorld = (pos) => (
 
 const getTileIndex = (pos) => pos.x + pos.y * worldSize;
 
-const getForegroundTile = (pos) => {
+const getTiles = (isForeground) => isForeground ? foregroundTiles : backgroundTiles;
+
+const getTile = (isForeground, pos) => {
     const index = getTileIndex(pos);
-    return foregroundTiles[index];
+    return getTiles(isForeground)[index];
 };
 
-const setForegroundTile = (pos, tile) => {
+const setTile = (isForeground, pos, tile) => {
     const index = getTileIndex(pos);
-    foregroundTiles[index] = tile;
+    getTiles(isForeground)[index] = tile;
     drawTile(pos);
 };
 
@@ -190,15 +199,15 @@ const buildInDirection = (offset) => {
     if (!posIsInWorld(pos)) {
         return;
     }
-    const tile = getForegroundTile(pos);
+    const tile = getTile(true, pos);
     if (tile instanceof BlockTile) {
-        setForegroundTile(pos, emptyTile);
+        setTile(true, pos, emptyTile);
         gameUpdateCommandList.push({
             commandName: "removeTile",
             pos: pos.copy().toJson(),
         });
     } else if (tile instanceof EmptyTile) {
-        setForegroundTile(pos, blockTiles[0]);
+        setTile(true, pos, blockTiles[0]);
         gameUpdateCommandList.push({
             commandName: "placeTile",
             pos: pos.copy().toJson(),
@@ -279,7 +288,7 @@ addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
         for (const playerTile of playerTiles) {
-            setForegroundTile(playerTile.pos, emptyTile);
+            setTile(true, playerTile.pos, emptyTile);
         }
     } else {
         setWorldTiles(tileChars);
@@ -291,7 +300,7 @@ addCommandListener("setState", (command) => {
         const pos = createPosFromJson(playerData.pos);
         new PlayerTile(playerData.username, pos);
     }
-    lastWorldChangeId = command.lastWorldChangeId;
+    lastTileChangeId = command.lastTileChangeId;
 });
 
 addCommandRepeater("walk", (command) => {
@@ -344,7 +353,7 @@ class ClientDelegate {
     addCommandsBeforeUpdateRequest() {
         gameUpdateCommandList.push({
             commandName: "getState",
-            lastWorldChangeId,
+            lastTileChangeId,
         });
     }
     

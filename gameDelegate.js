@@ -7,7 +7,10 @@ const worldTilesLength = worldSize ** 2;
 
 const foregroundTiles = Array(worldTilesLength).fill(null);
 const backgroundTiles = Array(worldTilesLength).fill(null);
-let lastWorldChangeId = 0;
+// This is a circular buffer.
+const tileChanges = Array(1000).fill(null);
+let lastTileChangeId = 0;
+let lastTileChangeIndex = 0;
 // Map from username to PlayerTile.
 const playerTileMap = new Map();
 
@@ -41,7 +44,11 @@ const createPosFromJson = (data) => new Pos(data.x, data.y);
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
-    // getTypeId, toDbJson
+    // toDbJson
+    
+    constructor(typeId) {
+        this.typeId = typeId;
+    }
     
     addEvent(pos) {
         // Do nothing.
@@ -58,8 +65,8 @@ class Tile {
 
 class EmptyTile extends Tile {
     
-    getTypeId() {
-        return tileTypeIds.empty;
+    constructor() {
+        super(tileTypeIds.empty);
     }
     
     toDbJson() {
@@ -72,12 +79,8 @@ const emptyTile = new EmptyTile();
 class GrassTile extends Tile {
     
     constructor(texture) {
-        super();
+        super(tileTypeIds.grass + texture);
         this.texture = texture;
-    }
-    
-    getTypeId() {
-        return tileTypeIds.grass + this.texture;
     }
     
     toDbJson() {
@@ -94,12 +97,8 @@ while (grassTiles.length < grassTextureAmount) {
 class BlockTile extends Tile {
     
     constructor(tier) {
-        super();
+        super(tileTypeIds.block + tier);
         this.tier = tier;
-    }
-    
-    getTypeId() {
-        return tileTypeIds.block + this.tier;
     }
     
     toDbJson() {
@@ -113,23 +112,44 @@ while (blockTiles.length < tierAmount) {
     blockTiles.push(tile);
 }
 
-class PlayerTile extends Tile {
+// EntityTiles may only exist in foregroundTiles.
+class EntityTile extends Tile {
+    
+    constructor(tileId) {
+        super(tileId);
+        this.pos = null;
+    }
+    
+    // EntityTiles should only change their type ID with this method.
+    setTypeId(typeId) {
+        if (typeId !== this.typeId) {
+            this.typeId = typeId;
+            new TileChange(true, this.pos.copy(), this.typeId);
+        }
+    }
+    
+    addEvent(pos) {
+        super.addEvent(pos);
+        this.pos = pos.copy();
+    }
+    
+    moveEvent(pos) {
+        super.moveEvent(pos);
+        this.pos.set(pos);
+    }
+}
+
+class PlayerTile extends EntityTile {
     
     constructor(player) {
-        super();
+        super(tileTypeIds.empty);
         this.player = player;
         this.pos = null;
     }
     
     addEvent(pos) {
         super.addEvent(pos);
-        this.pos = pos.copy();
         playerTileMap.set(this.player.username, this);
-    }
-    
-    moveEvent(pos) {
-        super.moveEvent(pos);
-        this.pos.set(pos);
     }
     
     deleteEvent() {
@@ -140,11 +160,11 @@ class PlayerTile extends Tile {
     addToWorld() {
         const { posX, posY } = this.player.extraFields;
         const pos = new Pos(posX ?? 0, posY ?? 0);
-        setForegroundTile(pos, this);
+        setTile(true, pos, this);
     }
     
     deleteFromWorld() {
-        setForegroundTile(this.pos, emptyTile);
+        setTile(true, this.pos, emptyTile);
     }
     
     walk(offset) {
@@ -153,14 +173,10 @@ class PlayerTile extends Tile {
         if (!posIsInWorld(nextPos)) {
             return;
         }
-        const nextTile = getForegroundTile(nextPos);
+        const nextTile = getTile(true, nextPos);
         if (nextTile instanceof EmptyTile) {
             swapForegroundTiles(this.pos, nextPos);
         }
-    }
-    
-    getTypeId() {
-        return tileTypeIds.empty;
     }
     
     toDbJson() {
@@ -172,6 +188,27 @@ class PlayerTile extends Tile {
             username: this.player.username,
             pos: this.pos.toJson(),
         }
+    }
+}
+
+class TileChange {
+    
+    constructor(isForeground, pos, typeId) {
+        this.isForeground = isForeground;
+        this.pos = pos;
+        this.typeId = typeId;
+        lastTileChangeId += 1;
+        this.id = lastTileChangeId;
+        lastTileChangeIndex = (lastTileChangeIndex + 1) % tileChanges.length;
+        tileChanges[lastTileChangeIndex] = this;
+    }
+    
+    toJson() {
+        return {
+            isForeground: this.isForeground,
+            pos: this.pos.toJson(),
+            typeId: this.typeId,
+        };
     }
 }
 
@@ -194,32 +231,30 @@ const posIsInWorld = (pos) => (
 
 const getTileIndex = (pos) => pos.x + pos.y * worldSize;
 
-const getForegroundTile = (pos) => {
+const getTiles = (isForeground) => isForeground ? foregroundTiles : backgroundTiles;
+
+const getTile = (isForeground, pos) => {
     const index = getTileIndex(pos);
-    return foregroundTiles[index];
+    return getTiles(isForeground)[index];
 };
 
-const getBackgroundTile = (pos) => {
-    const index = getTileIndex(pos);
-    return backgroundTiles[index];
-};
-
-const setTileHelper = (tiles, pos, tile) => {
+const setTile = (isForeground, pos, tile) => {
+    const tiles = getTiles(isForeground);
     const index = getTileIndex(pos);
     const lastTile = tiles[index];
-    if (lastTile !== null) {
+    let lastTypeId;
+    if (lastTile === null) {
+        lastTypeId = null;
+    } else {
+        lastTypeId = lastTile.typeId;
         lastTile.deleteEvent();
     }
     tiles[index] = tile;
     tile.addEvent(pos);
-};
-
-const setForegroundTile = (pos, tile) => {
-    setTileHelper(foregroundTiles, pos, tile);
-};
-
-const setBackgroundTile = (pos, tile) => {
-    setTileHelper(backgroundTiles, pos, tile);
+    const typeId = tile.typeId;
+    if (lastTypeId !== typeId) {
+        new TileChange(isForeground, pos.copy(), typeId);
+    }
 };
 
 const swapForegroundTiles = (pos1, pos2) => {
@@ -227,10 +262,20 @@ const swapForegroundTiles = (pos1, pos2) => {
     const index2 = getTileIndex(pos2);
     const tile1 = foregroundTiles[index1];
     const tile2 = foregroundTiles[index2];
+    const lastTypeId1 = tile1.typeId;
+    const lastTypeId2 = tile2.typeId;
     foregroundTiles[index1] = tile2;
     foregroundTiles[index2] = tile1;
     tile1.moveEvent(pos2);
     tile2.moveEvent(pos1);
+    const typeId1 = tile1.typeId;
+    const typeId2 = tile1.typeId;
+    if (lastTypeId1 !== typeId2) {
+        new TileChange(isForeground, pos1.copy(), typeId2);
+    }
+    if (lastTypeId2 !== typeId1) {
+        new TileChange(isForeground, pos2.copy(), typeId1);
+    }
 };
 
 const iterateWorldPos = (handle) => {
@@ -249,8 +294,8 @@ const createWorldTiles = () => {
     iterateWorldPos((pos) => {
         const foregroundTile = (Math.random() < 0.05) ? blockTiles[0] : emptyTile;
         const backgroundTile = (Math.random() < 0.05) ? grassTiles[0] : emptyTile;
-        setForegroundTile(pos, foregroundTile);
-        setBackgroundTile(pos, backgroundTile);
+        setTile(true, pos, foregroundTile);
+        setTile(false, pos, backgroundTile);
     });
 };
 
@@ -259,8 +304,8 @@ const readWorldTiles = () => {
     iterateWorldPos((pos, index) => {
         const foregroundTile = convertJsonToTile(data.foreground[index]);
         const backgroundTile = convertJsonToTile(data.background[index]);
-        setForegroundTile(pos, foregroundTile);
-        setBackgroundTile(pos, backgroundTile);
+        setTile(true, pos, foregroundTile);
+        setTile(false, pos, backgroundTile);
     });
 };
 
@@ -279,10 +324,31 @@ const encodeWorldTiles = () => {
         if (tile instanceof EmptyTile) {
             tile = backgroundTiles[index];
         }
-        const typeId = tile.getTypeId();
+        const typeId = tile.typeId;
         chars.push(String.fromCharCode(typeId + startTileChar));
     }
     return chars.join("");
+};
+
+const getTileChanges = (startChangeId) => {
+    if (lastTileChangeId - startChangeId > tileChanges.length - 5) {
+        return null;
+    }
+    const output = [];
+    let index = lastTileChangeIndex;
+    while (true) {
+        const tileChange = tileChanges[index];
+        if (tileChange === null || tileChange.id < startChangeId) {
+            break;
+        }
+        output.push(tileChange);
+        index -= 1;
+        if (index < 0) {
+            index = tileChanges.length - 1;
+        }
+    }
+    output.reverse();
+    return output;
 };
 
 if (fs.existsSync(worldTilesPath)) {
@@ -296,13 +362,19 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
     const outputCommand = {
         commandName: "setState",
         players: playerTiles.map((tile) => tile.toClientJson()),
-        lastWorldChangeId,
+        lastTileChangeId,
     };
-    if (command.lastWorldChangeId === null) {
+    const changeId = command.lastTileChangeId;
+    let changesToSend;
+    if (changeId === null) {
+        changesToSend = null;
+    } else {
+        changesToSend = getTileChanges(changeId + 1);
+    }
+    if (changesToSend === null) {
         outputCommand.worldTiles = encodeWorldTiles();
     } else {
-        // TODO: Send world changes to the client.
-        
+        outputCommand.tileChanges = changesToSend.map((change) => change.toJson());
     }
     outputCommands.push(outputCommand);
 });
@@ -315,13 +387,13 @@ gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => 
 gameUtils.addCommandListener("placeTile", true, (command, player, outputCommands) => {
     // TODO: Verify action.
     const pos = createPosFromJson(command.pos);
-    setForegroundTile(pos, blockTiles[0]);
+    setTile(true, pos, blockTiles[0]);
 });
 
 gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
     // TODO: Verify action.
     const pos = createPosFromJson(command.pos);
-    setForegroundTile(pos, emptyTile);
+    setTile(true, pos, emptyTile);
 });
 
 class GameDelegate {
