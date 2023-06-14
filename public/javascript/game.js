@@ -22,6 +22,8 @@ let tileChanges = [];
 let emptyTile;
 const grassTiles = [];
 const blockTiles = [];
+const buildItems = [];
+let playerSprite;
 let playerTiles = [];
 let localPlayerTile = null;
 const walkOffset = new Pos(0, 0);
@@ -72,10 +74,11 @@ class GrassTile extends BackgroundTile {
     constructor(texture) {
         super(tileTypeIds.grass + texture);
         this.texture = texture;
+        this.sprite = new Sprite(grassSpriteSet, this.texture);
     }
     
     getSprite() {
-        return grassSprite;
+        return this.sprite;
     }
 }
 
@@ -84,10 +87,11 @@ class BlockTile extends ForegroundTile {
     constructor(tier) {
         super(tileTypeIds.block + tier);
         this.tier = tier;
+        this.sprite = new Sprite(blockSpriteSet, this.tier);
     }
     
     getSprite() {
-        return blockSprite;
+        return this.sprite;
     }
     
     playerCanRemove() {
@@ -149,6 +153,56 @@ class TileChange {
     undo() {
         const tile = convertTypeIdToTile(this.lastTypeId)
         setTile(this.isForeground, this.pos, tile, false);
+    }
+}
+
+class BuildItem {
+    // Concrete subclasses of BuildItem must implement these methods:
+    // getDisplayName, getSprite
+    
+    constructor() {
+        buildItems.push(this);
+    }
+    
+    createTag() {
+        this.tag = document.createElement("div");
+        const sprite = this.getSprite();
+        if (sprite !== null) {
+            const spriteCanvas = createCanvasWithSprite(this.tag, sprite, 6);
+            spriteCanvas.style.marginRight = 8;
+        }
+        const spanTag = document.createElement("span");
+        spanTag.innerHTML = this.getDisplayName();
+        if (sprite !== null) {
+            spanTag.style.verticalAlign = 6;
+        }
+        this.tag.appendChild(spanTag);
+        this.tag.style.padding = "5px";
+        this.tag.style.border = "2px #FFFFFF solid";
+        this.tag.style.cursor = "pointer";
+        this.tag.onclick = () => {
+            // TODO: Handle click.
+            console.log(this);
+        };
+        this.tag.onmousedown = () => false;
+        document.getElementById("buildItemsContainer").appendChild(this.tag);
+    }
+}
+
+class BlockBuildItem extends BuildItem {
+    
+    constructor(tier) {
+        super();
+        this.tier = tier;
+        this.sprite = new Sprite(blockSpriteSet, this.tier);
+    }
+    
+    getDisplayName() {
+        return "Block " + this.tier;
+    }
+    
+    getSprite() {
+        return this.sprite;
     }
 }
 
@@ -420,8 +474,16 @@ class ClientDelegate {
             bufferCanvas.width = worldPixelSize;
             bufferCanvas.height = worldPixelSize;
             bufferContext = bufferCanvas.getContext("2d");
-            initializeTiles();
-            initializeSpriteSheet(done);
+            initializeSpriteSheet(() => {
+                playerSprite = new Sprite(playerSpriteSet, 0, false);
+                initializeTiles();
+                new BlockBuildItem(0);
+                new BlockBuildItem(1);
+                for (const buildItem of buildItems) {
+                    buildItem.createTag();
+                }
+                done();
+            });
         });
     }
     

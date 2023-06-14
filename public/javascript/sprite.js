@@ -17,7 +17,17 @@ let spriteImageDataList;
 const backgroundColor = new Color(255, 255, 255);
 const backgroundColorString = backgroundColor.toString();
 
-class Sprite {
+const drawSpriteImage = (context, scale, pos, image) => {
+    const scaledSize = spriteSize * scale;
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+        image,
+        pos.x * scaledSize, pos.y * scaledSize,
+        scaledSize, scaledSize,
+    );
+};
+
+class SpriteSet {
     
     // Each color palette is a list of two colors.
     constructor(sheetIndex, palettes, canFlip) {
@@ -32,6 +42,10 @@ class Sprite {
     
     getImageMap(flip) {
         return flip ? this.flippedImageMap : this.imageMap;
+    }
+    
+    getImage(paletteIndex, flip) {
+        return this.getImageMap(flip).get(paletteIndex);
     }
     
     initializeImage(paletteIndex, flip) {
@@ -88,21 +102,42 @@ class Sprite {
     }
     
     draw(context, scale, pos, paletteIndex = 0, flip = false) {
-        const image = this.getImageMap(flip).get(paletteIndex);
-        const scaledSize = spriteSize * scale;
-        context.imageSmoothingEnabled = false;
-        context.drawImage(
-            image,
-            pos.x * scaledSize, pos.y * scaledSize,
-            scaledSize, scaledSize,
-        );
+        const image = this.getImage(paletteIndex, flip);
+        drawSpriteImage(context, scale, pos, image);
+    }
+}
+
+class Sprite {
+    
+    constructor(spriteSet, paletteIndex, flip = false) {
+        this.image = spriteSet.getImage(paletteIndex, flip);
+    }
+    
+    draw(context, scale, pos) {
+        drawSpriteImage(context, scale, pos, this.image);
     }
 }
 
 const dummyPalette = [new Color(0, 0, 0), new Color(255, 255, 255)];
-const grassSprite = new Sprite(32, [dummyPalette], false);
-const blockSprite = new Sprite(24, [dummyPalette], false);
-const playerSprite = new Sprite(0, [dummyPalette], true);
+const grassSpriteSet = new SpriteSet(32, [dummyPalette], false);
+const blockSpriteSet = new SpriteSet(24, [
+    dummyPalette,
+    [new Color(0, 0, 255), new Color(255, 255, 255)]
+], false);
+const playerSpriteSet = new SpriteSet(0, [dummyPalette], true);
+
+const createCanvasWithSprite = (parentTag, sprite, scale) => {
+    const output = document.createElement("canvas");
+    const size = spriteSize * scale;
+    output.width = size;
+    output.height = size;
+    output.style.width = size / 2;
+    output.style.height = size / 2;
+    parentTag.appendChild(output);
+    const context = output.getContext("2d");
+    sprite.draw(context, scale, new Pos(0, 0));
+    return output;
+};
 
 const initializeSpriteSheet = (done) => {
     
