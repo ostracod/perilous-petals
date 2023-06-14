@@ -36,6 +36,10 @@ class Tile {
     constructor(typeId) {
         this.typeId = typeId;
     }
+    
+    playerCanRemove() {
+        return false;
+    }
 }
 
 class ForegroundTile extends Tile {
@@ -84,6 +88,10 @@ class BlockTile extends ForegroundTile {
     
     getSprite() {
         return blockSprite;
+    }
+    
+    playerCanRemove() {
+        return true;
     }
 }
 
@@ -228,18 +236,20 @@ const buildInDirection = (offset) => {
     if (!posIsInWorld(pos)) {
         return;
     }
-    const tile = getTile(true, pos);
-    if (tile instanceof BlockTile) {
+    const lastTile = getTile(true, pos);
+    if (lastTile.playerCanRemove()) {
         setTile(true, pos, emptyTile);
         gameUpdateCommandList.push({
             commandName: "removeTile",
-            pos: pos.copy().toJson(),
+            offset: offset.toJson(),
         });
-    } else if (tile instanceof EmptyTile) {
-        setTile(true, pos, blockTiles[0]);
+    } else if (lastTile instanceof EmptyTile) {
+        const tier = 0;
+        setTile(true, pos, blockTiles[tier]);
         gameUpdateCommandList.push({
-            commandName: "placeTile",
-            pos: pos.copy().toJson(),
+            commandName: "placeBlock",
+            offset: offset.toJson(),
+            tier,
         });
     }
 };
@@ -351,13 +361,29 @@ addCommandRepeater("walk", (command) => {
 });
 
 addCommandRepeater("removeTile", (command) => {
-    const pos = createPosFromJson(command.pos);
-    setTile(true, pos, emptyTile);
+    const pos = localPlayerTile.pos.copy();
+    const offset = createPosFromJson(command.offset);
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const lastTile = getTile(true, pos);
+    if (lastTile.playerCanRemove()) {
+        setTile(true, pos, emptyTile);
+    }
 });
 
-addCommandRepeater("placeTile", (command) => {
-    const pos = createPosFromJson(command.pos);
-    setTile(true, pos, blockTiles[0]);
+addCommandRepeater("placeBlock", (command) => {
+    const pos = localPlayerTile.pos.copy();
+    const offset = createPosFromJson(command.offset);
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const lastTile = getTile(true, pos);
+    if (lastTile instanceof EmptyTile) {
+        setTile(true, pos, blockTiles[command.tier]);
+    }
 });
 
 class ConstantsRequest extends AjaxRequest {

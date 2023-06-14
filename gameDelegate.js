@@ -61,6 +61,10 @@ class Tile {
     deleteEvent() {
         // Do nothing.
     }
+    
+    playerCanRemove() {
+        return false;
+    }
 }
 
 class EmptyTile extends Tile {
@@ -99,6 +103,10 @@ class BlockTile extends Tile {
     constructor(tier) {
         super(tileTypeIds.block + tier);
         this.tier = tier;
+    }
+    
+    playerCanRemove() {
+        return true;
     }
     
     toDbJson() {
@@ -384,16 +392,32 @@ gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => 
     playerTile.walk(command.offset);
 });
 
-gameUtils.addCommandListener("placeTile", true, (command, player, outputCommands) => {
-    // TODO: Verify action.
-    const pos = createPosFromJson(command.pos);
-    setTile(true, pos, blockTiles[0]);
+gameUtils.addCommandListener("placeBlock", true, (command, player, outputCommands) => {
+    const playerTile = playerTileMap.get(player.username);
+    const pos = playerTile.pos.copy();
+    const offset = createPosFromJson(command.offset);
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const lastTile = getTile(true, pos);
+    if (lastTile instanceof EmptyTile) {
+        setTile(true, pos, blockTiles[command.tier]);
+    }
 });
 
 gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
-    // TODO: Verify action.
-    const pos = createPosFromJson(command.pos);
-    setTile(true, pos, emptyTile);
+    const playerTile = playerTileMap.get(player.username);
+    const pos = playerTile.pos.copy();
+    const offset = createPosFromJson(command.offset);
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const lastTile = getTile(true, pos);
+    if (lastTile.playerCanRemove()) {
+        setTile(true, pos, emptyTile);
+    }
 });
 
 class GameDelegate {
