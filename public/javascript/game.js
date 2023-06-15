@@ -23,6 +23,7 @@ let emptyTile;
 const grassTiles = [];
 const blockTiles = [];
 const buildItems = [];
+let selectedBuildItem = null;
 let playerSprite;
 let playerTiles = [];
 let localPlayerTile = null;
@@ -158,10 +159,16 @@ class TileChange {
 
 class BuildItem {
     // Concrete subclasses of BuildItem must implement these methods:
-    // getDisplayName, getSprite
+    // getDisplayName, getSprite, getTile, getCommandName, getCommandFields
     
     constructor() {
+        this.index = buildItems.length;
         buildItems.push(this);
+    }
+    
+    updateBorderStyle() {
+        const color = (selectedBuildItem === this) ? "000000" : "FFFFFF";
+        this.tag.style.border = `2px #${color} solid`;
     }
     
     createTag() {
@@ -177,15 +184,38 @@ class BuildItem {
             spanTag.style.verticalAlign = 6;
         }
         this.tag.appendChild(spanTag);
+        this.updateBorderStyle();
         this.tag.style.padding = "5px";
-        this.tag.style.border = "2px #FFFFFF solid";
         this.tag.style.cursor = "pointer";
         this.tag.onclick = () => {
-            // TODO: Handle click.
-            console.log(this);
+            this.select();
         };
         this.tag.onmousedown = () => false;
         document.getElementById("buildItemsContainer").appendChild(this.tag);
+    }
+    
+    select() {
+        if (selectedBuildItem !== null) {
+            selectedBuildItem.unselect();
+        }
+        selectedBuildItem = this;
+        this.updateBorderStyle();
+    }
+    
+    unselect() {
+        if (selectedBuildItem === this) {
+            selectedBuildItem = null;
+            this.updateBorderStyle();
+        }
+    }
+    
+    sendCommand(offset) {
+        gameUpdateCommandList.push({
+            commandName: this.getCommandName(),
+            offset: offset.toJson(),
+            ...this.getCommandFields(),
+            buildItemIndex: this.index,
+        });
     }
 }
 
@@ -194,7 +224,7 @@ class BlockBuildItem extends BuildItem {
     constructor(tier) {
         super();
         this.tier = tier;
-        this.sprite = new Sprite(blockSpriteSet, this.tier);
+        this.tile = blockTiles[this.tier];
     }
     
     getDisplayName() {
@@ -202,7 +232,19 @@ class BlockBuildItem extends BuildItem {
     }
     
     getSprite() {
-        return this.sprite;
+        return this.tile.getSprite()
+    }
+    
+    getTile() {
+        return this.tile;
+    }
+    
+    getCommandName() {
+        return "placeBlock";
+    }
+    
+    getCommandFields() {
+        return { tier: this.tier };
     }
 }
 
@@ -216,6 +258,15 @@ const initializeTiles = () => {
         const tile = new BlockTile(blockTiles.length);
         blockTiles.push(tile);
     }
+};
+
+const initializeBuildItems = () => {
+    new BlockBuildItem(0);
+    new BlockBuildItem(1);
+    for (const buildItem of buildItems) {
+        buildItem.createTag();
+    }
+    buildItems[0].select();
 };
 
 const posIsInWorld = (pos) => (
@@ -298,13 +349,9 @@ const buildInDirection = (offset) => {
             offset: offset.toJson(),
         });
     } else if (lastTile instanceof EmptyTile) {
-        const tier = 0;
-        setTile(true, pos, blockTiles[tier]);
-        gameUpdateCommandList.push({
-            commandName: "placeBlock",
-            offset: offset.toJson(),
-            tier,
-        });
+        const tile = selectedBuildItem.getTile();
+        setTile(true, pos, tile);
+        selectedBuildItem.sendCommand(offset);
     }
 };
 
@@ -377,6 +424,21 @@ const drawTile = (pos) => {
     bufferCanvasHasChanged = true;
 };
 
+const repeatBuildItem = (command) => {
+    const pos = localPlayerTile.pos.copy();
+    const offset = createPosFromJson(command.offset);
+    pos.add(offset);
+    if (!posIsInWorld(pos)) {
+        return;
+    }
+    const lastTile = getTile(true, pos);
+    if (lastTile instanceof EmptyTile) {
+        const buildItem = buildItems[command.buildItemIndex];
+        const tile = buildItem.getTile();
+        setTile(true, pos, tile);
+    }
+};
+
 addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
@@ -427,18 +489,7 @@ addCommandRepeater("removeTile", (command) => {
     }
 });
 
-addCommandRepeater("placeBlock", (command) => {
-    const pos = localPlayerTile.pos.copy();
-    const offset = createPosFromJson(command.offset);
-    pos.add(offset);
-    if (!posIsInWorld(pos)) {
-        return;
-    }
-    const lastTile = getTile(true, pos);
-    if (lastTile instanceof EmptyTile) {
-        setTile(true, pos, blockTiles[command.tier]);
-    }
-});
+addCommandRepeater("placeBlock", repeatBuildItem);
 
 class ConstantsRequest extends AjaxRequest {
     
@@ -477,11 +528,7 @@ class ClientDelegate {
             initializeSpriteSheet(() => {
                 playerSprite = new Sprite(playerSpriteSet, 0, false);
                 initializeTiles();
-                new BlockBuildItem(0);
-                new BlockBuildItem(1);
-                for (const buildItem of buildItems) {
-                    buildItem.createTag();
-                }
+                initializeBuildItems();
                 done();
             });
         });
