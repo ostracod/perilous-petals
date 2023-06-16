@@ -7,24 +7,34 @@ let worldPixelSize;
 let worldTilesLength;
 let tierAmount;
 let grassTextureAmount;
+let sproutStageAmount;
 let tileTypeIds;
 let startTileChar;
 
 let bufferCanvas;
 let bufferContext;
 let bufferCanvasHasChanged = false;
-let localPlayerUsername;
+
 let foregroundTiles;
 let backgroundTiles;
 let lastTileChangeId = null;
 let hasLoadedTiles = false;
 let tileChanges = [];
+
+let sproutSprites = [];
+let playerSprite;
+
+// Map from tile type ID to Tile;
+const typeIdTileMap = new Map();
 let emptyTile;
 const grassTiles = [];
 const blockTiles = [];
+const sproutTiles = [];
+
 const buildItems = [];
 let selectedBuildItem = null;
-let playerSprite;
+
+let localPlayerUsername;
 let playerTiles = [];
 let localPlayerTile = null;
 const walkOffset = new Pos(0, 0);
@@ -100,6 +110,23 @@ class BlockTile extends ForegroundTile {
     }
 }
 
+class SproutTile extends ForegroundTile {
+    
+    constructor(stage) {
+        super(tileTypeIds.sprout + stage);
+        this.stage = stage;
+        this.sprite = sproutSprites[this.stage];
+    }
+    
+    getSprite() {
+        return this.sprite;
+    }
+    
+    playerCanRemove() {
+        return true;
+    }
+}
+
 class EntityTile extends ForegroundTile {
     
     constructor(typeId, pos) {
@@ -152,7 +179,7 @@ class TileChange {
     }
     
     undo() {
-        const tile = convertTypeIdToTile(this.lastTypeId)
+        const tile = convertTypeIdToTile(this.lastTypeId);
         setTile(this.isForeground, this.pos, tile, false);
     }
 }
@@ -219,6 +246,42 @@ class BuildItem {
     }
 }
 
+class SproutBuildItem extends BuildItem {
+    
+    constructor(isPoisonous, tier = null) {
+        super();
+        this.isPoisonous = isPoisonous;
+        this.tier = tier;
+    }
+    
+    getDisplayName() {
+        let output = ((this.tier === null) ? "Flower" : this.tier) + " Seed";
+        if (this.isPoisonous) {
+            output = "Poison " + output;
+        }
+        return output;
+    }
+    
+    getSprite() {
+        return sproutSprites[2];
+    }
+    
+    getTile() {
+        return sproutTiles[0];
+    }
+    
+    getCommandName() {
+        return "placeSprout";
+    }
+    
+    getCommandFields() {
+        return {
+            isPoisonous: this.isPoisonous,
+            tier: this.tier,
+        };
+    }
+}
+
 class BlockBuildItem extends BuildItem {
     
     constructor(tier) {
@@ -248,21 +311,38 @@ class BlockBuildItem extends BuildItem {
     }
 }
 
+const initializeSprites = () => {
+    playerSprite = new Sprite(playerSpriteSet, 0, false);
+    for (const spriteSet of sproutSpriteSets) {
+        sproutSprites.push(new Sprite(spriteSet, 0));
+    }
+};
+
 const initializeTiles = () => {
     emptyTile = new EmptyTile();
-    while (grassTiles.length < grassTextureAmount) {
-        const tile = new GrassTile(grassTiles.length);
+    typeIdTileMap.set(tileTypeIds.empty, emptyTile);
+    for (let texture = 0; texture < grassTextureAmount; texture++) {
+        const tile = new GrassTile(texture);
+        typeIdTileMap.set(tile.typeId, tile);
         grassTiles.push(tile);
     }
-    while (blockTiles.length < tierAmount) {
-        const tile = new BlockTile(blockTiles.length);
+    for (let tier = 0; tier < tierAmount; tier++) {
+        const tile = new BlockTile(tier);
+        typeIdTileMap.set(tile.typeId, tile);
         blockTiles.push(tile);
+    }
+    for (let stage = 0; stage < sproutStageAmount; stage++) {
+        const tile = new SproutTile(stage);
+        typeIdTileMap.set(tile.typeId, tile);
+        sproutTiles.push(tile)
     }
 };
 
 const initializeBuildItems = () => {
     new BlockBuildItem(0);
     new BlockBuildItem(1);
+    new SproutBuildItem(false);
+    new SproutBuildItem(true);
     for (const buildItem of buildItems) {
         buildItem.createTag();
     }
@@ -370,18 +450,8 @@ const stopWalk = (offset) => {
     }
 };
 
-const convertTypeIdToTile = (typeId) => {
-    if (typeId === tileTypeIds.empty) {
-        return emptyTile;
-    }
-    if (typeId >= tileTypeIds.grass && typeId < tileTypeIds.grass + grassTextureAmount) {
-        return grassTiles[typeId - tileTypeIds.grass];
-    }
-    if (typeId >= tileTypeIds.block && typeId < tileTypeIds.block + tierAmount) {
-        return blockTiles[typeId - tileTypeIds.block];
-    }
-    throw new Error(`Cannot convert type ID ${typeId} to a tile.`);
-};
+
+const convertTypeIdToTile = (typeId) => typeIdTileMap.get(typeId);
 
 const setWorldTiles = (tileChars) => {
     iterateWorldPos((pos, index) => {
@@ -490,6 +560,7 @@ addCommandRepeater("removeTile", (command) => {
 });
 
 addCommandRepeater("placeBlock", repeatBuildItem);
+addCommandRepeater("placeSprout", repeatBuildItem);
 
 class ConstantsRequest extends AjaxRequest {
     
@@ -503,12 +574,16 @@ class ConstantsRequest extends AjaxRequest {
         worldSize = data.worldSize;
         tierAmount = data.tierAmount;
         grassTextureAmount = data.grassTextureAmount;
+        sproutStageAmount = data.sproutStageAmount;
         tileTypeIds = data.tileTypeIds;
         startTileChar = data.startTileChar;
         worldPixelSize = worldSize * spriteSize;
         worldTilesLength = worldSize ** 2;
         foregroundTiles = Array(worldTilesLength).fill(null);
         backgroundTiles = Array(worldTilesLength).fill(null);
+        for (let stage = 0; stage < sproutStageAmount; stage += 1) {
+            sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette], false));
+        }
         this.callback();
     }
 }
@@ -526,7 +601,7 @@ class ClientDelegate {
             bufferCanvas.height = worldPixelSize;
             bufferContext = bufferCanvas.getContext("2d");
             initializeSpriteSheet(() => {
-                playerSprite = new Sprite(playerSpriteSet, 0, false);
+                initializeSprites();
                 initializeTiles();
                 initializeBuildItems();
                 done();

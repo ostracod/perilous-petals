@@ -124,6 +124,7 @@ const blockSpriteSet = new SpriteSet(24, [
     dummyPalette,
     [new Color(0, 0, 255), new Color(255, 255, 255)]
 ], false);
+const sproutSpriteSets = [];
 const playerSpriteSet = new SpriteSet(0, [dummyPalette], true);
 
 const createCanvasWithSprite = (parentTag, sprite, scale) => {

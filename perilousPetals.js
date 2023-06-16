@@ -1,19 +1,13 @@
 
 import express from "express";
 import { ostracodMultiplayer } from "ostracod-multiplayer";
-import { projectPath, worldSize, tierAmount, grassTextureAmount, tileTypeIds, startTileChar } from "./constants.js";
+import { projectPath, clientConstants } from "./constants.js";
 import { gameDelegate } from "./gameDelegate.js";
 
 const router = express.Router();
 
 router.get("/gameConstants", (req, res, next) => {
-    res.json({
-        worldSize,
-        tierAmount,
-        grassTextureAmount,
-        tileTypeIds,
-        startTileChar,
-    });
+    res.json(clientConstants);
 });
 
 console.log("Starting Perilous Petals server...");

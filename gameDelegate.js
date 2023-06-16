@@ -152,7 +152,6 @@ class PlayerTile extends EntityTile {
     constructor(player) {
         super(tileTypeIds.empty);
         this.player = player;
-        this.pos = null;
     }
     
     addEvent(pos) {
@@ -187,6 +186,30 @@ class PlayerTile extends EntityTile {
         }
     }
     
+    buildTile(offset, getBuildTile) {
+        const pos = this.pos.copy();
+        pos.add(offset);
+        if (!posIsInWorld(pos)) {
+            return;
+        }
+        const lastTile = getTile(true, pos);
+        if (lastTile instanceof EmptyTile) {
+            setTile(true, pos, getBuildTile());
+        }
+    }
+    
+    removeTile(offset) {
+        const pos = this.pos.copy();
+        pos.add(offset);
+        if (!posIsInWorld(pos)) {
+            return;
+        }
+        const lastTile = getTile(true, pos);
+        if (lastTile.playerCanRemove()) {
+            setTile(true, pos, emptyTile);
+        }
+    }
+    
     toDbJson() {
         return emptyTile.toDbJson();
     }
@@ -196,6 +219,27 @@ class PlayerTile extends EntityTile {
             username: this.player.username,
             pos: this.pos.toJson(),
         }
+    }
+}
+
+class FlowerTile extends EntityTile {
+    
+    constructor(isPoisonous, tier) {
+        super(tileTypeIds.sprout);
+        this.isPoisonous = isPoisonous;
+        this.tier = tier;
+    }
+    
+    playerCanRemove() {
+        return true;
+    }
+    
+    toDbJson() {
+        return {
+            type: "flower",
+            isPoisonous: this.isPoisonous,
+            tier: this.tier,
+        };
     }
 }
 
@@ -229,6 +273,8 @@ const convertJsonToTile = (data) => {
         return blockTiles[data.tier];
     } else if (type === "grass") {
         return grassTiles[data.texture];
+    } else if (type === "flower") {
+        return new FlowerTile(data.isPoisonous, data.tier);
     }
     throw new Error(`Unrecognized tile type "${type}".`);
 };
@@ -394,30 +440,21 @@ gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => 
 
 gameUtils.addCommandListener("placeBlock", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
-    const pos = playerTile.pos.copy();
     const offset = createPosFromJson(command.offset);
-    pos.add(offset);
-    if (!posIsInWorld(pos)) {
-        return;
-    }
-    const lastTile = getTile(true, pos);
-    if (lastTile instanceof EmptyTile) {
-        setTile(true, pos, blockTiles[command.tier]);
-    }
+    playerTile.buildTile(offset, () => blockTiles[command.tier]);
+});
+
+gameUtils.addCommandListener("placeSprout", true, (command, player, outputCommands) => {
+    const playerTile = playerTileMap.get(player.username);
+    const offset = createPosFromJson(command.offset);
+    const tier = command.tier ?? 0;
+    playerTile.buildTile(offset, () => new FlowerTile(command.isPoisonous, tier));
 });
 
 gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
-    const pos = playerTile.pos.copy();
     const offset = createPosFromJson(command.offset);
-    pos.add(offset);
-    if (!posIsInWorld(pos)) {
-        return;
-    }
-    const lastTile = getTile(true, pos);
-    if (lastTile.playerCanRemove()) {
-        setTile(true, pos, emptyTile);
-    }
+    playerTile.removeTile(offset);
 });
 
 class GameDelegate {
