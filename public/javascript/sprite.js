@@ -118,14 +118,13 @@ class Sprite {
     }
 }
 
-const dummyPalette = [new Color(0, 0, 0), new Color(255, 255, 255)];
-const grassSpriteSet = new SpriteSet(32, [dummyPalette], false);
-const blockSpriteSet = new SpriteSet(24, [
-    dummyPalette,
-    [new Color(0, 0, 255), new Color(255, 255, 255)]
-], false);
+const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
+const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
+const grassSpriteSet = new SpriteSet(32, [dummyPalette1], false);
+const blockSpriteSet = new SpriteSet(24, [dummyPalette1, dummyPalette2], false);
 const sproutSpriteSets = [];
-const playerSpriteSet = new SpriteSet(0, [dummyPalette], true);
+const flowerSpriteSets = [new SpriteSet(16, [dummyPalette1, dummyPalette2], false)];
+const playerSpriteSet = new SpriteSet(0, [dummyPalette1], true);
 
 const createCanvasWithSprite = (parentTag, sprite, scale) => {
     const output = document.createElement("canvas");

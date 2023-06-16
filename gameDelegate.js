@@ -1,7 +1,7 @@
 
 import * as fs from "fs";
 import { gameUtils } from "ostracod-multiplayer";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, tileTypeIds, startTileChar } from "./constants.js";
+import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar } from "./constants.js";
 
 const worldTilesLength = worldSize ** 2;
 
@@ -11,6 +11,7 @@ const backgroundTiles = Array(worldTilesLength).fill(null);
 const tileChanges = Array(1000).fill(null);
 let lastTileChangeId = 0;
 let lastTileChangeIndex = 0;
+const entityTileSet = new Set();
 // Map from username to PlayerTile.
 const playerTileMap = new Map();
 
@@ -139,11 +140,21 @@ class EntityTile extends Tile {
     addEvent(pos) {
         super.addEvent(pos);
         this.pos = pos.copy();
+        entityTileSet.add(this);
+    }
+    
+    deleteEvent() {
+        super.deleteEvent();
+        entityTileSet.delete(this);
     }
     
     moveEvent(pos) {
         super.moveEvent(pos);
         this.pos.set(pos);
+    }
+    
+    timerEvent() {
+        // Do nothing.
     }
 }
 
@@ -224,10 +235,24 @@ class PlayerTile extends EntityTile {
 
 class FlowerTile extends EntityTile {
     
-    constructor(isPoisonous, tier) {
+    constructor(isPoisonous, tier, age = 0) {
         super(tileTypeIds.sprout);
         this.isPoisonous = isPoisonous;
         this.tier = tier;
+        this.age = age;
+    }
+    
+    timerEvent() {
+        super.timerEvent();
+        this.age += 1;
+        const stage = Math.floor(this.age / 50);
+        let typeId;
+        if (stage < sproutStageAmount) {
+            typeId = tileTypeIds.sprout + stage;
+        } else {
+            typeId = tileTypeIds.flower + this.tier;
+        }
+        this.setTypeId(typeId);
     }
     
     playerCanRemove() {
@@ -239,6 +264,7 @@ class FlowerTile extends EntityTile {
             type: "flower",
             isPoisonous: this.isPoisonous,
             tier: this.tier,
+            age: this.age,
         };
     }
 }
@@ -274,7 +300,7 @@ const convertJsonToTile = (data) => {
     } else if (type === "grass") {
         return grassTiles[data.texture];
     } else if (type === "flower") {
-        return new FlowerTile(data.isPoisonous, data.tier);
+        return new FlowerTile(data.isPoisonous, data.tier, data.age);
     }
     throw new Error(`Unrecognized tile type "${type}".`);
 };
@@ -405,6 +431,13 @@ const getTileChanges = (startChangeId) => {
     return output;
 };
 
+const timerEvent = () => {
+    const entityTiles = Array.from(entityTileSet);
+    for (const entityTile of entityTiles) {
+        entityTile.timerEvent();
+    }
+};
+
 if (fs.existsSync(worldTilesPath)) {
     readWorldTiles();
 } else {
@@ -479,5 +512,7 @@ class GameDelegate {
 }
 
 export const gameDelegate = new GameDelegate();
+
+setInterval(timerEvent, 100);
 
 

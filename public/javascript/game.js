@@ -22,6 +22,7 @@ let hasLoadedTiles = false;
 let tileChanges = [];
 
 let sproutSprites = [];
+let flowerSprites = [];
 let playerSprite;
 
 // Map from tile type ID to Tile;
@@ -30,6 +31,7 @@ let emptyTile;
 const grassTiles = [];
 const blockTiles = [];
 const sproutTiles = [];
+const flowerTiles = [];
 
 const buildItems = [];
 let selectedBuildItem = null;
@@ -44,10 +46,11 @@ let firstStepDelay = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
-    // isForeground, getSprite
+    // isForeground
     
     constructor(typeId) {
         this.typeId = typeId;
+        this.sprite = null;
     }
     
     playerCanRemove() {
@@ -74,10 +77,6 @@ class EmptyTile extends BackgroundTile {
     constructor() {
         super(tileTypeIds.empty);
     }
-    
-    getSprite() {
-        return null;
-    }
 }
 
 class GrassTile extends BackgroundTile {
@@ -87,10 +86,6 @@ class GrassTile extends BackgroundTile {
         this.texture = texture;
         this.sprite = new Sprite(grassSpriteSet, this.texture);
     }
-    
-    getSprite() {
-        return this.sprite;
-    }
 }
 
 class BlockTile extends ForegroundTile {
@@ -99,10 +94,6 @@ class BlockTile extends ForegroundTile {
         super(tileTypeIds.block + tier);
         this.tier = tier;
         this.sprite = new Sprite(blockSpriteSet, this.tier);
-    }
-    
-    getSprite() {
-        return this.sprite;
     }
     
     playerCanRemove() {
@@ -118,8 +109,17 @@ class SproutTile extends ForegroundTile {
         this.sprite = sproutSprites[this.stage];
     }
     
-    getSprite() {
-        return this.sprite;
+    playerCanRemove() {
+        return true;
+    }
+}
+
+class FlowerTile extends ForegroundTile {
+    
+    constructor(tier) {
+        super(tileTypeIds.flower + tier);
+        this.tier = tier;
+        this.sprite = flowerSprites[this.tier];
     }
     
     playerCanRemove() {
@@ -140,15 +140,12 @@ class PlayerTile extends EntityTile {
     constructor(username, pos) {
         super(tileTypeIds.empty, pos);
         this.username = username;
+        this.sprite = playerSprite;
         setTile(true, this.pos, this, false);
         playerTiles.push(this);
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
         }
-    }
-    
-    getSprite() {
-        return playerSprite;
     }
     
     walk(offset) {
@@ -295,7 +292,7 @@ class BlockBuildItem extends BuildItem {
     }
     
     getSprite() {
-        return this.tile.getSprite()
+        return this.tile.sprite;
     }
     
     getTile() {
@@ -316,6 +313,9 @@ const initializeSprites = () => {
     for (const spriteSet of sproutSpriteSets) {
         sproutSprites.push(new Sprite(spriteSet, 0));
     }
+    const flowerSpriteSet = flowerSpriteSets[0];
+    flowerSprites.push(new Sprite(flowerSpriteSet, 0));
+    flowerSprites.push(new Sprite(flowerSpriteSet, 1));
 };
 
 const initializeTiles = () => {
@@ -336,6 +336,11 @@ const initializeTiles = () => {
         typeIdTileMap.set(tile.typeId, tile);
         sproutTiles.push(tile)
     }
+    for (let tier = 0; tier < tierAmount; tier++) {
+        const tile = new FlowerTile(tier);
+        typeIdTileMap.set(tile.typeId, tile);
+        flowerTiles.push(tile);
+    }
 };
 
 const initializeBuildItems = () => {
@@ -343,6 +348,8 @@ const initializeBuildItems = () => {
     new BlockBuildItem(1);
     new SproutBuildItem(false);
     new SproutBuildItem(true);
+    new SproutBuildItem(true, 0);
+    new SproutBuildItem(true, 1);
     for (const buildItem of buildItems) {
         buildItem.createTag();
     }
@@ -450,7 +457,6 @@ const stopWalk = (offset) => {
     }
 };
 
-
 const convertTypeIdToTile = (typeId) => typeIdTileMap.get(typeId);
 
 const setWorldTiles = (tileChars) => {
@@ -475,10 +481,10 @@ const setWorldTiles = (tileChars) => {
 const drawTile = (pos) => {
     const index = getTileIndex(pos);
     const foregroundTile = foregroundTiles[index];
-    let sprite = foregroundTile.getSprite();
+    let sprite = foregroundTile.sprite;
     if (sprite === null) {
         const backgroundTile = backgroundTiles[index];
-        sprite = backgroundTile.getSprite();
+        sprite = backgroundTile.sprite;
     }
     if (sprite === null) {
         bufferContext.fillStyle = backgroundColorString;
@@ -582,7 +588,7 @@ class ConstantsRequest extends AjaxRequest {
         foregroundTiles = Array(worldTilesLength).fill(null);
         backgroundTiles = Array(worldTilesLength).fill(null);
         for (let stage = 0; stage < sproutStageAmount; stage += 1) {
-            sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette], false));
+            sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette1], false));
         }
         this.callback();
     }

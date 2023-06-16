@@ -13,11 +13,13 @@ export const sproutStageAmount = 3;
 const grassTypeId = 1;
 const blockTypeId = grassTypeId + grassTextureAmount;
 const sproutTypeId = blockTypeId + tierAmount;
+const flowerTypeId = sproutTypeId + sproutStageAmount;
 export const tileTypeIds = {
     empty: 0,
     grass: grassTypeId,
     block: blockTypeId,
     sprout: sproutTypeId,
+    flower: flowerTypeId,
 };
 export const startTileChar = 35;
 
