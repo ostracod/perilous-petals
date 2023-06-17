@@ -1,7 +1,7 @@
 
 import * as fs from "fs";
 import { gameUtils } from "ostracod-multiplayer";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar } from "./constants.js";
+import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty } from "./constants.js";
 
 const worldTilesLength = worldSize ** 2;
 
@@ -63,8 +63,20 @@ class Tile {
         // Do nothing.
     }
     
+    playerBuildEvent(playerTile) {
+        // Do nothing.
+    }
+    
+    playerCanWalkOn() {
+        return false;
+    }
+    
     playerCanRemove() {
         return false;
+    }
+    
+    playerRemoveEvent(playerTile) {
+        // Do nothing.
     }
 }
 
@@ -72,6 +84,10 @@ class EmptyTile extends Tile {
     
     constructor() {
         super(tileTypeIds.empty);
+    }
+    
+    playerCanWalkOn() {
+        return true;
     }
     
     toDbJson() {
@@ -192,7 +208,10 @@ class PlayerTile extends EntityTile {
             return;
         }
         const nextTile = getTile(true, nextPos);
-        if (nextTile instanceof EmptyTile) {
+        if (nextTile.playerCanWalkOn()) {
+            if (nextTile.playerCanRemove()) {
+                this.removeTile(offset);
+            }
             swapForegroundTiles(this.pos, nextPos);
         }
     }
@@ -205,7 +224,9 @@ class PlayerTile extends EntityTile {
         }
         const lastTile = getTile(true, pos);
         if (lastTile instanceof EmptyTile) {
-            setTile(true, pos, getBuildTile());
+            const tile = getBuildTile();
+            setTile(true, pos, tile);
+            tile.playerBuildEvent(this);
         }
     }
     
@@ -217,8 +238,18 @@ class PlayerTile extends EntityTile {
         }
         const lastTile = getTile(true, pos);
         if (lastTile.playerCanRemove()) {
+            lastTile.playerRemoveEvent(this);
             setTile(true, pos, emptyTile);
         }
+    }
+    
+    increaseScore(amount) {
+        this.player.score += amount;
+    }
+    
+    decreaseScore(amount) {
+        const { score } = this.player;
+        this.player.score = Math.max(score - amount, 0);
     }
     
     toDbJson() {
@@ -242,12 +273,20 @@ class FlowerTile extends EntityTile {
         this.age = age;
     }
     
+    getStage() {
+        return Math.min(Math.floor(this.age / 50), sproutStageAmount);
+    }
+    
+    isSprout() {
+        return flowerStageIsSprout(this.getStage());
+    }
+    
     timerEvent() {
         super.timerEvent();
         this.age += 1;
-        const stage = Math.floor(this.age / 50);
+        const stage = this.getStage();
         let typeId;
-        if (stage < sproutStageAmount) {
+        if (flowerStageIsSprout(stage)) {
             typeId = tileTypeIds.sprout + stage;
         } else {
             typeId = tileTypeIds.flower + this.tier;
@@ -255,8 +294,28 @@ class FlowerTile extends EntityTile {
         this.setTypeId(typeId);
     }
     
+    playerBuildEvent(playerTile) {
+        playerTile.decreaseScore(sproutBuildCost);
+    }
+    
+    playerCanWalkOn() {
+        return !this.isSprout();
+    }
+    
     playerCanRemove() {
         return true;
+    }
+    
+    playerRemoveEvent(playerTile) {
+        super.playerRemoveEvent(playerTile);
+        if (this.isSprout()) {
+            playerTile.decreaseScore(sproutRemovalPenalty);
+        } else if (this.isPoisonous) {
+            playerTile.decreaseScore(poisonFlowerPenalty);
+        } else {
+            const pointAmount = flowerPointAmounts[this.tier];
+            playerTile.increaseScore(pointAmount);
+        }
     }
     
     toDbJson() {
@@ -437,6 +496,8 @@ const timerEvent = () => {
         entityTile.timerEvent();
     }
 };
+
+const flowerStageIsSprout = (stage) => (stage < sproutStageAmount);
 
 if (fs.existsSync(worldTilesPath)) {
     readWorldTiles();

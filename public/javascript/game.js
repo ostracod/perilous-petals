@@ -56,6 +56,10 @@ class Tile {
     playerCanRemove() {
         return false;
     }
+    
+    playerCanWalkOn() {
+        return false;
+    }
 }
 
 class ForegroundTile extends Tile {
@@ -76,6 +80,10 @@ class EmptyTile extends BackgroundTile {
     
     constructor() {
         super(tileTypeIds.empty);
+    }
+    
+    playerCanWalkOn() {
+        return true;
     }
 }
 
@@ -122,6 +130,10 @@ class FlowerTile extends ForegroundTile {
         this.sprite = flowerSprites[this.tier];
     }
     
+    playerCanWalkOn() {
+        return true;
+    }
+    
     playerCanRemove() {
         return true;
     }
@@ -155,7 +167,7 @@ class PlayerTile extends EntityTile {
             return false;
         }
         const nextTile = getTile(true, nextPos);
-        if (nextTile instanceof EmptyTile) {
+        if (nextTile.playerCanWalkOn()) {
             setTile(true, this.pos, emptyTile, false);
             this.pos.set(nextPos);
             setTile(true, this.pos, this, false);
