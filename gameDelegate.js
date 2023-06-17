@@ -266,15 +266,16 @@ class PlayerTile extends EntityTile {
 
 class FlowerTile extends EntityTile {
     
-    constructor(isPoisonous, tier, age = 0) {
+    constructor(data) {
         super(tileTypeIds.sprout);
-        this.isPoisonous = isPoisonous;
-        this.tier = tier;
-        this.age = age;
+        this.creatorUsername = data.creatorUsername;
+        this.isPoisonous = data.isPoisonous;
+        this.tier = data.tier;
+        this.age = data.age;
     }
     
     getStage() {
-        return Math.min(Math.floor(this.age / 50), sproutStageAmount);
+        return Math.min(Math.floor(this.age / 20), sproutStageAmount);
     }
     
     isSprout() {
@@ -312,6 +313,12 @@ class FlowerTile extends EntityTile {
             playerTile.decreaseScore(sproutRemovalPenalty);
         } else if (this.isPoisonous) {
             playerTile.decreaseScore(poisonFlowerPenalty);
+            if (playerTile.player.username !== this.creatorUsername) {
+                const creatorTile = playerTileMap.get(this.creatorUsername);
+                if (typeof creatorTile !== "undefined") {
+                    creatorTile.increaseScore(poisonFlowerPenalty);
+                }
+            }
         } else {
             const pointAmount = flowerPointAmounts[this.tier];
             playerTile.increaseScore(pointAmount);
@@ -321,6 +328,7 @@ class FlowerTile extends EntityTile {
     toDbJson() {
         return {
             type: "flower",
+            creatorUsername: this.creatorUsername,
             isPoisonous: this.isPoisonous,
             tier: this.tier,
             age: this.age,
@@ -359,7 +367,7 @@ const convertJsonToTile = (data) => {
     } else if (type === "grass") {
         return grassTiles[data.texture];
     } else if (type === "flower") {
-        return new FlowerTile(data.isPoisonous, data.tier, data.age);
+        return new FlowerTile(data);
     }
     throw new Error(`Unrecognized tile type "${type}".`);
 };
@@ -497,6 +505,10 @@ const timerEvent = () => {
     }
 };
 
+const createSproutTile = (creatorUsername, isPoisonous, tier) => new FlowerTile({
+    creatorUsername, isPoisonous, tier, age: 0,
+});
+
 const flowerStageIsSprout = (stage) => (stage < sproutStageAmount);
 
 if (fs.existsSync(worldTilesPath)) {
@@ -542,7 +554,9 @@ gameUtils.addCommandListener("placeSprout", true, (command, player, outputComman
     const playerTile = playerTileMap.get(player.username);
     const offset = createPosFromJson(command.offset);
     const tier = command.tier ?? 0;
-    playerTile.buildTile(offset, () => new FlowerTile(command.isPoisonous, tier));
+    playerTile.buildTile(offset, () => (
+        createSproutTile(player.username, command.isPoisonous, tier)
+    ));
 });
 
 gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
