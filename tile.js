@@ -14,6 +14,8 @@ let lastTileChangeIndex = 0;
 const entityTileSet = new Set();
 // Map from username to PlayerTile.
 export const playerTileMap = new Map();
+let emptyForegroundTileCount = 0;
+let grassTileCount = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -23,24 +25,26 @@ class Tile {
         this.typeId = typeId;
     }
     
-    addEvent(pos) {
-        // Do nothing.
+    addEvent(isForeground, pos) {
+        if (isForeground && this.killsGrass() && getTile(false, pos) instanceof GrassTile) {
+            setTile(false, pos, emptyTile);
+        }
     }
     
     moveEvent(pos) {
         // Do nothing.
     }
     
-    deleteEvent() {
-        // Do nothing.
-    }
-    
-    playerBuildEvent(playerTile) {
+    deleteEvent(isForeground) {
         // Do nothing.
     }
     
     playerCanWalkOn() {
         return false;
+    }
+    
+    playerBuildEvent(playerTile) {
+        // Do nothing.
     }
     
     playerCanRemove() {
@@ -50,12 +54,30 @@ class Tile {
     playerRemoveEvent(playerTile) {
         // Do nothing.
     }
+    
+    killsGrass() {
+        return false;
+    }
 }
 
 class EmptyTile extends Tile {
     
     constructor() {
         super(tileTypeIds.empty);
+    }
+    
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
+        if (isForeground) {
+            emptyForegroundTileCount += 1;
+        }
+    }
+    
+    deleteEvent(isForeground) {
+        super.deleteEvent(isForeground);
+        if (isForeground) {
+            emptyForegroundTileCount -= 1;
+        }
     }
     
     playerCanWalkOn() {
@@ -74,6 +96,16 @@ class GrassTile extends Tile {
     constructor(texture) {
         super(tileTypeIds.grass + texture);
         this.texture = texture;
+    }
+    
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
+        grassTileCount += 1;
+    }
+    
+    deleteEvent(isForeground) {
+        super.deleteEvent(isForeground);
+        grassTileCount -= 1;
     }
     
     toDbJson() {
@@ -95,6 +127,10 @@ class BlockTile extends Tile {
     }
     
     playerCanRemove() {
+        return true;
+    }
+    
+    killsGrass() {
         return true;
     }
     
@@ -125,14 +161,14 @@ class EntityTile extends Tile {
         }
     }
     
-    addEvent(pos) {
-        super.addEvent(pos);
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
         this.pos = pos.copy();
         entityTileSet.add(this);
     }
     
-    deleteEvent() {
-        super.deleteEvent();
+    deleteEvent(isForeground) {
+        super.deleteEvent(isForeground);
         entityTileSet.delete(this);
     }
     
@@ -153,13 +189,13 @@ export class PlayerTile extends EntityTile {
         this.player = player;
     }
     
-    addEvent(pos) {
-        super.addEvent(pos);
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
         playerTileMap.set(this.player.username, this);
     }
     
-    deleteEvent() {
-        super.deleteEvent();
+    deleteEvent(isForeground) {
+        super.deleteEvent(isForeground);
         playerTileMap.delete(this.player.username);
     }
     
@@ -277,12 +313,12 @@ class FlowerTile extends EntityTile {
         this.setTypeId(typeId);
     }
     
-    playerBuildEvent(playerTile) {
-        playerTile.decreaseScore(sproutBuildCost);
-    }
-    
     playerCanWalkOn() {
         return !this.isSprout();
+    }
+    
+    playerBuildEvent(playerTile) {
+        playerTile.decreaseScore(sproutBuildCost);
     }
     
     playerCanRemove() {
@@ -305,6 +341,10 @@ class FlowerTile extends EntityTile {
             const pointAmount = flowerPointAmounts[this.tier];
             playerTile.increaseScore(pointAmount);
         }
+    }
+    
+    killsGrass() {
+        return true;
     }
     
     toDbJson() {
@@ -376,10 +416,10 @@ const setTile = (isForeground, pos, tile) => {
         lastTypeId = null;
     } else {
         lastTypeId = lastTile.typeId;
-        lastTile.deleteEvent();
+        lastTile.deleteEvent(isForeground);
     }
     tiles[index] = tile;
-    tile.addEvent(pos);
+    tile.addEvent(isForeground, pos);
     const typeId = tile.typeId;
     if (lastTypeId !== typeId) {
         new TileChange(isForeground, pos.copy(), typeId);
@@ -421,10 +461,8 @@ const iterateWorldPos = (handle) => {
 
 const createWorldTiles = () => {
     iterateWorldPos((pos) => {
-        const foregroundTile = (Math.random() < 0.05) ? blockTiles[0] : emptyTile;
-        const backgroundTile = (Math.random() < 0.05) ? grassTiles[0] : emptyTile;
-        setTile(true, pos, foregroundTile);
-        setTile(false, pos, backgroundTile);
+        setTile(true, pos, emptyTile);
+        setTile(false, pos, emptyTile);
     });
 };
 
@@ -496,11 +534,32 @@ export const createSproutTile = (creatorUsername, isPoisonous, tier) => new Flow
 
 const flowerStageIsSprout = (stage) => (stage < sproutStageAmount);
 
+const growGrass = () => {
+    if (Math.random() > 0.02) {
+        return;
+    }
+    const grassRatio = grassTileCount / emptyForegroundTileCount;
+    if (grassRatio >= 30 / 676) {
+        return;
+    }
+    const pos = new Pos(
+        Math.floor(Math.random() * worldSize),
+        Math.floor(Math.random() * worldSize),
+    );
+    if (getTile(true, pos) instanceof EmptyTile
+            && getTile(false, pos) instanceof EmptyTile) {
+        const texture = Math.floor(Math.random() * grassTiles.length);
+        const grassTile = grassTiles[texture];
+        setTile(false, pos, grassTile);
+    }
+};
+
 export const tilesTimerEvent = () => {
     const entityTiles = Array.from(entityTileSet);
     for (const entityTile of entityTiles) {
         entityTile.timerEvent();
     }
+    growGrass();
 };
 
 

@@ -73,7 +73,7 @@ class GrassTile extends BackgroundTile {
     constructor(texture) {
         super(tileTypeIds.grass + texture);
         this.texture = texture;
-        this.sprite = new Sprite(grassSpriteSet, this.texture);
+        this.sprite = new Sprite(grassSpriteSets[this.texture]);
     }
 }
 

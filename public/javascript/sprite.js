@@ -29,7 +29,7 @@ const backgroundColorString = backgroundColor.toString();
 const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
 const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
 
-let grassSpriteSet;
+const grassSpriteSets = [];
 let blockSpriteSet;
 const sproutSpriteSets = [];
 let flowerSpriteSets;
@@ -121,7 +121,7 @@ class SpriteSet {
 
 class Sprite {
     
-    constructor(spriteSet, paletteIndex, flip = false) {
+    constructor(spriteSet, paletteIndex = 0, flip = false) {
         this.image = spriteSet.getImage(paletteIndex, flip);
     }
     
@@ -131,7 +131,9 @@ class Sprite {
 }
 
 const initializeSpriteSets = () => {
-    grassSpriteSet = new SpriteSet(32, [dummyPalette1], false);
+    for (let texture = 0; texture < grassTextureAmount; texture++) {
+        grassSpriteSets.push(new SpriteSet(32 + texture, [dummyPalette1], false));
+    }
     blockSpriteSet = new SpriteSet(24, [dummyPalette1, dummyPalette2], false);
     for (let stage = 0; stage < sproutStageAmount; stage += 1) {
         sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette1], false));
