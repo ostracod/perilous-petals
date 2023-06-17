@@ -2,30 +2,42 @@
 const spriteSize = 8;
 const spriteSheetTileSize = 8;
 const spriteSheetSize = spriteSize * spriteSheetTileSize;
-const sprites = [];
+const pixelScale = 6;
+const scaledSpriteSize = spriteSize * pixelScale;
+const spriteSets = [];
+
 // Contains all sprites without color.
 let spriteSheetImage;
 let spriteSheetCanvas;
 let spriteSheetContext;
 let spriteSheetImageData;
 let spriteSheetImageDataList;
+
 // Contains a single sprite with color.
 let spriteCanvas;
 let spriteContext;
 let spriteImageData;
 let spriteImageDataList;
+
+// Stores an image of tiles in the world.
+let bufferCanvas;
+let bufferContext;
+let bufferCanvasHasChanged = false;
+
 const backgroundColor = new Color(255, 255, 255);
 const backgroundColorString = backgroundColor.toString();
+const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
+const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
 
-const drawSpriteImage = (context, scale, pos, image) => {
-    const scaledSize = spriteSize * scale;
-    context.imageSmoothingEnabled = false;
-    context.drawImage(
-        image,
-        pos.x * scaledSize, pos.y * scaledSize,
-        scaledSize, scaledSize,
-    );
-};
+let grassSpriteSet;
+let blockSpriteSet;
+const sproutSpriteSets = [];
+let flowerSpriteSets;
+let playerSpriteSet;
+
+const sproutSprites = [];
+const flowerSprites = [];
+let playerSprite;
 
 class SpriteSet {
     
@@ -37,7 +49,7 @@ class SpriteSet {
         this.imageMap = new Map();
         this.flippedImageMap = this.canFlip ? new Map() : null;
         this.images = [];
-        sprites.push(this);
+        spriteSets.push(this);
     }
     
     getImageMap(flip) {
@@ -118,25 +130,14 @@ class Sprite {
     }
 }
 
-const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
-const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
-const grassSpriteSet = new SpriteSet(32, [dummyPalette1], false);
-const blockSpriteSet = new SpriteSet(24, [dummyPalette1, dummyPalette2], false);
-const sproutSpriteSets = [];
-const flowerSpriteSets = [new SpriteSet(16, [dummyPalette1, dummyPalette2], false)];
-const playerSpriteSet = new SpriteSet(0, [dummyPalette1], true);
-
-const createCanvasWithSprite = (parentTag, sprite, scale) => {
-    const output = document.createElement("canvas");
-    const size = spriteSize * scale;
-    output.width = size;
-    output.height = size;
-    output.style.width = size / 2;
-    output.style.height = size / 2;
-    parentTag.appendChild(output);
-    const context = output.getContext("2d");
-    sprite.draw(context, scale, new Pos(0, 0));
-    return output;
+const initializeSpriteSets = () => {
+    grassSpriteSet = new SpriteSet(32, [dummyPalette1], false);
+    blockSpriteSet = new SpriteSet(24, [dummyPalette1, dummyPalette2], false);
+    for (let stage = 0; stage < sproutStageAmount; stage += 1) {
+        sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette1], false));
+    }
+    flowerSpriteSets = [new SpriteSet(16, [dummyPalette1, dummyPalette2], false)];
+    playerSpriteSet = new SpriteSet(0, [dummyPalette1], true);
 };
 
 const initializeSpriteSheet = (done) => {
@@ -165,18 +166,58 @@ const initializeSpriteSheet = (done) => {
         spriteImageData = spriteContext.createImageData(spriteSize, spriteSize);
         spriteImageDataList = spriteImageData.data;
         
-        for (const sprite of sprites) {
-            sprite.initialize();
+        for (const spriteSet of spriteSets) {
+            spriteSet.initialize();
         }
         
         const loadWaitInterval = setInterval(() => {
-            if (sprites.every((sprite) => sprite.hasFinishedLoading())) {
+            if (spriteSets.every((spriteSet) => spriteSet.hasFinishedLoading())) {
                 clearInterval(loadWaitInterval);
                 done();
             }
         }, 100);
     };
     spriteSheetImage.src = "/images/sprites.png";
+};
+
+const initializeSprites = () => {
+    playerSprite = new Sprite(playerSpriteSet, 0, false);
+    for (const spriteSet of sproutSpriteSets) {
+        sproutSprites.push(new Sprite(spriteSet, 0));
+    }
+    const flowerSpriteSet = flowerSpriteSets[0];
+    flowerSprites.push(new Sprite(flowerSpriteSet, 0));
+    flowerSprites.push(new Sprite(flowerSpriteSet, 1));
+};
+
+const initializeBufferCanvas = () => {
+    bufferCanvas = document.createElement("canvas");
+    bufferCanvas.width = worldPixelSize;
+    bufferCanvas.height = worldPixelSize;
+    bufferContext = bufferCanvas.getContext("2d");
+};
+
+const drawSpriteImage = (context, scale, pos, image) => {
+    const scaledSize = spriteSize * scale;
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+        image,
+        pos.x * scaledSize, pos.y * scaledSize,
+        scaledSize, scaledSize,
+    );
+};
+
+const createCanvasWithSprite = (parentTag, sprite, scale) => {
+    const output = document.createElement("canvas");
+    const size = spriteSize * scale;
+    output.width = size;
+    output.height = size;
+    output.style.width = size / 2;
+    output.style.height = size / 2;
+    parentTag.appendChild(output);
+    const context = output.getContext("2d");
+    sprite.draw(context, scale, new Pos(0, 0));
+    return output;
 };
 
 
