@@ -1,7 +1,7 @@
 
 import * as fs from "fs";
 import { gameUtils } from "ostracod-multiplayer";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty } from "./constants.js";
+import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty } from "./constants.js";
 
 const worldTilesLength = worldSize ** 2;
 
@@ -245,6 +245,15 @@ class PlayerTile extends EntityTile {
     
     increaseScore(amount) {
         this.player.score += amount;
+        const { extraFields } = this.player;
+        while (true) {
+            const scoreThreshold = levelPointAmounts[extraFields.level];
+            if (typeof scoreThreshold === "undefined"
+                    || this.player.score < scoreThreshold) {
+                break;
+            }
+            extraFields.level += 1;
+        }
     }
     
     decreaseScore(amount) {
@@ -259,6 +268,7 @@ class PlayerTile extends EntityTile {
     toClientJson() {
         return {
             username: this.player.username,
+            level: this.player.extraFields.level,
             pos: this.pos.toJson(),
         }
     }
@@ -572,6 +582,9 @@ class GameDelegate {
     }
     
     playerEnterEvent(player) {
+        if (player.extraFields.level === null) {
+            player.extraFields.level = 1;
+        }
         const playerTile = new PlayerTile(player);
         playerTile.addToWorld();
     }

@@ -149,15 +149,28 @@ class EntityTile extends ForegroundTile {
 
 class PlayerTile extends EntityTile {
     
-    constructor(username, pos) {
+    constructor(username, level, pos) {
         super(tileTypeIds.empty, pos);
         this.username = username;
+        this.level = level;
         this.sprite = playerSprite;
         setTile(true, this.pos, this, false);
         playerTiles.push(this);
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
         }
+    }
+    
+    drawName() {
+        context.font = "28px Arial";
+        context.textAlign = "center";
+        context.textBaseline = "bottom";
+        context.fillStyle = "#000000";
+        context.fillText(
+            `${this.username} L${this.level}`,
+            Math.round((this.pos.x + 1 / 2) * scaledSpriteSize),
+            Math.round((this.pos.y - 1 / 4) * scaledSpriteSize),
+        );
     }
     
     walk(offset) {
@@ -555,7 +568,7 @@ addCommandListener("setState", (command) => {
     localPlayerTile = null;
     for (const playerData of command.players) {
         const pos = createPosFromJson(playerData.pos);
-        new PlayerTile(playerData.username, pos);
+        new PlayerTile(playerData.username, playerData.level, pos);
     }
     lastTileChangeId = command.lastTileChangeId;
 });
@@ -651,6 +664,9 @@ class ClientDelegate {
             context.imageSmoothingEnabled = false;
             context.drawImage(bufferCanvas, 0, 0, canvasWidth, canvasHeight);
             bufferCanvasHasChanged = false;
+            for (const playerTile of playerTiles) {
+                playerTile.drawName();
+            }
         }
     }
     
