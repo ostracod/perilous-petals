@@ -1,4 +1,6 @@
 
+import * as commonUtils from "./commonUtils.js";
+
 export class Pos {
     
     constructor(x, y) {
@@ -25,6 +27,20 @@ export class Pos {
     }
 }
 
-export const createPosFromJson = (data) => new Pos(data.x, data.y);
+const readClientPos = (data) => {
+    const { x, y } = data;
+    if (!commonUtils.isValidInt(x) || !commonUtils.isValidInt(y)) {
+        return null;
+    }
+    return new Pos(x, y);
+};
+
+export const readClientOffset = (data) => {
+    const offset = readClientPos(data);
+    if (offset === null || Math.abs(offset.x) + Math.abs(offset.y) !== 1) {
+        return null;
+    }
+    return offset;
+};
 
 

@@ -2,9 +2,11 @@
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty, playerEmotions } from "./constants.js";
-import { Pos, createPosFromJson } from "./pos.js";
+import * as commonUtils from "./commonUtils.js";
+import { Pos } from "./pos.js";
 
 const worldTilesLength = worldSize ** 2;
+const maxWalkBudget = 30;
 
 const foregroundTiles = Array(worldTilesLength).fill(null);
 const backgroundTiles = Array(worldTilesLength).fill(null);
@@ -193,6 +195,7 @@ export class PlayerTile extends EntityTile {
         super(tileTypeIds.empty);
         this.player = player;
         this.flip = false;
+        this.walkBudget = maxWalkBudget;
     }
     
     addEvent(isForeground, pos) {
@@ -203,6 +206,12 @@ export class PlayerTile extends EntityTile {
     deleteEvent(isForeground) {
         super.deleteEvent(isForeground);
         playerTileMap.delete(this.player.username);
+    }
+    
+    timerEvent() {
+        if (this.walkBudget < maxWalkBudget) {
+            this.walkBudget += 1;
+        }
     }
     
     addToWorld() {
@@ -223,22 +232,32 @@ export class PlayerTile extends EntityTile {
     }
     
     walk(offset) {
+        if (this.walkBudget < 0) {
+            return;
+        }
         const nextPos = this.pos.copy();
         nextPos.add(offset);
         if (!posIsInWorld(nextPos)) {
             return;
         }
         const nextTile = getTile(true, nextPos);
-        if (nextTile.playerCanWalkOn()) {
-            if (nextTile.playerCanRemove()) {
-                this.removeTile(offset);
-            }
-            swapForegroundTiles(this.pos, nextPos);
+        if (!nextTile.playerCanWalkOn()) {
+            return;
         }
+        if (nextTile.playerCanRemove()) {
+            this.removeTile(offset);
+        }
+        swapForegroundTiles(this.pos, nextPos);
+        this.walkBudget -= 1.5;
     }
     
     emote(emotion) {
         new EmoteChange(this.player.username, emotion);
+    }
+    
+    valueIsValidTier(value) {
+        return (commonUtils.isValidInt(value) && value >= 0
+            && value < this.player.extraFields.level);
     }
     
     createSproutTile(isPoisonous, tier) {
@@ -253,8 +272,8 @@ export class PlayerTile extends EntityTile {
                 }
                 mask <<= 1;
             }
+            tier = Math.min(tier, this.player.extraFields.level - 1);
         }
-        tier = Math.min(tier, this.player.extraFields.level - 1);
         return new FlowerTile({
             creatorUsername: this.player.username,
             isPoisonous,

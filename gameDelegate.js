@@ -1,26 +1,35 @@
 
 import { gameUtils } from "ostracod-multiplayer";
-import { createPosFromJson } from "./pos.js";
+import * as commonUtils from "./commonUtils.js";
+import { Pos, readClientOffset } from "./pos.js";
 import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent } from "./tile.js";
+
+const readOffsetCommand = (command, player) => {
+    const playerTile = playerTileMap.get(player.username);
+    const offset = readClientOffset(command.offset);
+    if (typeof playerTile === "undefined" || offset === null) {
+        return { offset: null, playerTile: null };
+    }
+    return { offset, playerTile };
+};
 
 initWorldTiles();
 
 gameUtils.addCommandListener("getState", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
-    playerTile.flip = command.flip;
+    const { flip, lastWorldChangeId: changeId } = command;
+    if (typeof playerTile === "undefined" || typeof flip !== "boolean"
+            || !commonUtils.isValidInt(changeId, true)) {
+        return;
+    }
+    playerTile.flip = flip;
     const playerTiles = Array.from(playerTileMap.values());
     const outputCommand = {
         commandName: "setState",
         players: playerTiles.map((tile) => tile.toClientJson()),
         lastWorldChangeId: getLastWorldChangeId(),
     };
-    const changeId = command.lastWorldChangeId;
-    let changesToSend;
-    if (changeId === null) {
-        changesToSend = null;
-    } else {
-        changesToSend = getWorldChanges(changeId + 1);
-    }
+    const changesToSend = (changeId === null) ? null : getWorldChanges(changeId + 1);
     if (changesToSend === null) {
         outputCommand.worldTiles = encodeWorldTiles();
     } else {
@@ -30,28 +39,34 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
 });
 
 gameUtils.addCommandListener("walk", true, (command, player, outputCommands) => {
-    const playerTile = playerTileMap.get(player.username);
-    playerTile.walk(command.offset);
+    const { offset, playerTile } = readOffsetCommand(command, player);
+    if (offset !== null) {
+        playerTile.walk(offset);
+    }
 });
 
 gameUtils.addCommandListener("placeBlock", true, (command, player, outputCommands) => {
-    const playerTile = playerTileMap.get(player.username);
-    const offset = createPosFromJson(command.offset);
-    playerTile.buildTile(offset, () => blockTiles[command.tier]);
+    const { offset, playerTile } = readOffsetCommand(command, player);
+    const { tier } = command;
+    if (offset !== null && playerTile.valueIsValidTier(tier)) {
+        playerTile.buildTile(offset, () => blockTiles[tier]);
+    }
 });
 
 gameUtils.addCommandListener("placeSprout", true, (command, player, outputCommands) => {
-    const playerTile = playerTileMap.get(player.username);
-    const offset = createPosFromJson(command.offset);
-    playerTile.buildTile(offset, () => (
-        playerTile.createSproutTile(command.isPoisonous, command.tier)
-    ));
+    const { offset, playerTile } = readOffsetCommand(command, player);
+    const { isPoisonous, tier } = command;
+    if (offset !== null && typeof isPoisonous === "boolean"
+            && (tier === null || (playerTile.valueIsValidTier(tier) && isPoisonous))) {
+        playerTile.buildTile(offset, () => playerTile.createSproutTile(isPoisonous, tier));
+    }
 });
 
 gameUtils.addCommandListener("removeTile", true, (command, player, outputCommands) => {
-    const playerTile = playerTileMap.get(player.username);
-    const offset = createPosFromJson(command.offset);
-    playerTile.removeTile(offset);
+    const { offset, playerTile } = readOffsetCommand(command, player);
+    if (offset !== null) {
+        playerTile.removeTile(offset);
+    }
 });
 
 class GameDelegate {
