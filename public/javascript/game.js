@@ -11,7 +11,8 @@ class BuildItem {
     // Concrete subclasses of BuildItem must implement these methods:
     // getDisplayName, getSprite, getTile, getCommandName, getCommandFields, spriteIsWhite
     
-    constructor() {
+    constructor(minLevel) {
+        this.minLevel = minLevel;
         this.index = buildItems.length;
         buildItems.push(this);
     }
@@ -19,6 +20,11 @@ class BuildItem {
     updateBorderStyle() {
         const color = (selectedBuildItem === this) ? "000000" : "FFFFFF";
         this.tag.style.border = `2px #${color} solid`;
+    }
+    
+    updateVisibility() {
+        const level = getLocalPlayerLevel();
+        this.tag.style.display = (level === null || level < this.minLevel) ? "none" : "";
     }
     
     createTag() {
@@ -36,7 +42,8 @@ class BuildItem {
         }
         this.tag.appendChild(spanTag);
         this.updateBorderStyle();
-        this.tag.style.padding = "2px";
+        this.updateVisibility();
+        this.tag.style.padding = "3px";
         this.tag.style.cursor = "pointer";
         this.tag.onclick = () => {
             this.select();
@@ -73,7 +80,7 @@ class BuildItem {
 class SproutBuildItem extends BuildItem {
     
     constructor(isPoisonous, tier = null) {
-        super();
+        super((tier === null) ? 1 : Math.max(tier + 1, 2));
         this.isPoisonous = isPoisonous;
         this.tier = tier;
     }
@@ -113,7 +120,7 @@ class SproutBuildItem extends BuildItem {
 class BlockBuildItem extends BuildItem {
     
     constructor(tier) {
-        super();
+        super(tier + 1);
         this.tier = tier;
         this.tile = blockTiles[this.tier];
     }
@@ -156,6 +163,12 @@ const initializeBuildItems = () => {
         buildItem.createTag();
     }
     buildItems[0].select();
+};
+
+const updateBuildItemsVisibility = () => {
+    for (const buildItem of buildItems) {
+        buildItem.updateVisibility();
+    }
 };
 
 const handleWorldChanges = (worldChanges) => {
@@ -283,12 +296,16 @@ addCommandListener("setState", (command) => {
     if (typeof worldChanges !== "undefined") {
         handleWorldChanges(worldChanges);
     }
+    lastWorldChangeId = command.lastWorldChangeId;
+    const lastLevel = getLocalPlayerLevel();
     playerTileMap = new Map();
     localPlayerTile = null;
     for (const playerData of command.players) {
         new PlayerTile(playerData);
     }
-    lastWorldChangeId = command.lastWorldChangeId;
+    if (getLocalPlayerLevel() !== lastLevel) {
+        updateBuildItemsVisibility();
+    }
 });
 
 addCommandRepeater("walk", (command) => {

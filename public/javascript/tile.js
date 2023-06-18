@@ -351,4 +351,6 @@ const drawTile = (pos) => {
     bufferCanvasHasChanged = true;
 };
 
+const getLocalPlayerLevel = () => (localPlayerTile === null) ? null : localPlayerTile.level;
+
 
