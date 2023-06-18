@@ -7,10 +7,11 @@ let grassTextureAmount;
 let sproutStageAmount;
 let tileTypeIds;
 let startTileChar;
+let playerEmotions;
 
 let foregroundTiles;
 let backgroundTiles;
-let lastTileChangeId = null;
+let lastWorldChangeId = null;
 let hasLoadedTiles = false;
 let tileChanges = [];
 
@@ -21,10 +22,14 @@ const grassTiles = [];
 const blockTiles = [];
 const sproutTiles = [];
 const flowerTiles = [];
-let playerTiles = [];
+
+// Map from username to PlayerTile.
+let playerTileMap = new Map();
 let localPlayerTile = null;
 let localPlayerUsername;
 let localPlayerFlip = false;
+// Map from username to Emote.
+const usernameEmoteMap = new Map();
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -146,16 +151,26 @@ class PlayerTile extends EntityTile {
         }
         this.updateSprite();
         setTile(true, this.pos, this, false);
-        playerTiles.push(this);
+        playerTileMap.set(this.username, this);
     }
     
     updateSprite() {
-        this.sprite = this.flip ? playerSprites[1] : playerSprites[0];
+        const emote = usernameEmoteMap.get(this.username);
+        let emotion;
+        if (typeof emote === "undefined") {
+            emotion = playerEmotions.neutral;
+        } else {
+            emotion = emote.emotion;
+        }
+        this.sprite = playerSprites[emotion * 2 + (this.flip ? 1 : 0)];
     }
     
     redraw() {
+        const lastSprite = this.sprite;
         this.updateSprite();
-        drawTile(this.pos);
+        if (this.sprite !== lastSprite) {
+            drawTile(this.pos);
+        }
     }
     
     drawName() {
@@ -200,6 +215,32 @@ class TileChange {
     undo() {
         const tile = convertTypeIdToTile(this.lastTypeId);
         setTile(this.isForeground, this.pos, tile, false);
+    }
+}
+
+class Emote {
+    
+    constructor(username, emotion) {
+        this.username = username;
+        this.emotion = emotion;
+        this.age = 0;
+        usernameEmoteMap.set(this.username, this);
+        this.redrawPlayer();
+    }
+    
+    redrawPlayer() {
+        const playerTile = playerTileMap.get(this.username);
+        if (typeof playerTile !== "undefined") {
+            playerTile.redraw();
+        }
+    }
+    
+    timerEvent() {
+        this.age += 1;
+        if (this.age > 15) {
+            usernameEmoteMap.delete(this.username);
+            this.redrawPlayer();
+        }
     }
 }
 

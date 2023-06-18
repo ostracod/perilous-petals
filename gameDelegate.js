@@ -1,7 +1,7 @@
 
 import { gameUtils } from "ostracod-multiplayer";
 import { createPosFromJson } from "./pos.js";
-import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getTileChanges, getLastTileChangeId, createSproutTile, tilesTimerEvent } from "./tile.js";
+import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, createSproutTile, tilesTimerEvent } from "./tile.js";
 
 initWorldTiles();
 
@@ -12,19 +12,19 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
     const outputCommand = {
         commandName: "setState",
         players: playerTiles.map((tile) => tile.toClientJson()),
-        lastTileChangeId: getLastTileChangeId(),
+        lastWorldChangeId: getLastWorldChangeId(),
     };
-    const changeId = command.lastTileChangeId;
+    const changeId = command.lastWorldChangeId;
     let changesToSend;
     if (changeId === null) {
         changesToSend = null;
     } else {
-        changesToSend = getTileChanges(changeId + 1);
+        changesToSend = getWorldChanges(changeId + 1);
     }
     if (changesToSend === null) {
         outputCommand.worldTiles = encodeWorldTiles();
     } else {
-        outputCommand.tileChanges = changesToSend.map((change) => change.toJson());
+        outputCommand.worldChanges = changesToSend.map((change) => change.toJson());
     }
     outputCommands.push(outputCommand);
 });

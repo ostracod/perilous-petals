@@ -29,6 +29,12 @@ export const sproutBuildCost = 1;
 export const sproutRemovalPenalty = 1;
 export const poisonFlowerPenalty = 15;
 
+export const playerEmotions = {
+    neutral: 0,
+    happy: 1,
+    sad: 2,
+};
+
 export const clientConstants = {
     worldSize,
     tierAmount,
@@ -37,6 +43,7 @@ export const clientConstants = {
     tileTypeIds,
     startTileChar,
     levelPointAmounts,
+    playerEmotions,
 };
 
 

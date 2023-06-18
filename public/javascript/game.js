@@ -158,6 +158,25 @@ const initializeBuildItems = () => {
     buildItems[0].select();
 };
 
+const handleWorldChanges = (worldChanges) => {
+    for (let index = tileChanges.length - 1; index >= 0; index--) {
+        const change = tileChanges[index];
+        change.undo();
+    }
+    tileChanges = [];
+    for (const change of worldChanges) {
+        if (change.type === "tile") {
+            const pos = createPosFromJson(change.pos);
+            const tile = convertTypeIdToTile(change.tileTypeId);
+            setTile(change.isForeground, pos, tile, false);
+        } else if (change.type = "emote") {
+            new Emote(change.username, change.emotion);
+        } else {
+            throw new Error(`Unrecognized world change type "${changeType}".`);
+        }
+    }
+};
+
 const setLocalPlayerFlip = (offset) => {
     if (offset.x === 0) {
         return;
@@ -252,7 +271,7 @@ const repeatBuildItem = (command) => {
 addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
-        for (const playerTile of playerTiles) {
+        for (const playerTile of playerTileMap.values()) {
             setTile(true, playerTile.pos, emptyTile, false);
         }
     } else {
@@ -260,25 +279,16 @@ addCommandListener("setState", (command) => {
         hasLoadedTiles = true;
         tileChanges = [];
     }
-    const serverChanges = command.tileChanges;
-    if (typeof serverChanges !== "undefined") {
-        for (let index = tileChanges.length - 1; index >= 0; index--) {
-            const change = tileChanges[index];
-            change.undo();
-        }
-        tileChanges = [];
-        for (const change of serverChanges) {
-            const pos = createPosFromJson(change.pos);
-            const tile = convertTypeIdToTile(change.typeId);
-            setTile(change.isForeground, pos, tile, false);
-        }
+    const { worldChanges } = command;
+    if (typeof worldChanges !== "undefined") {
+        handleWorldChanges(worldChanges);
     }
-    playerTiles = [];
+    playerTileMap = new Map();
     localPlayerTile = null;
     for (const playerData of command.players) {
         new PlayerTile(playerData);
     }
-    lastTileChangeId = command.lastTileChangeId;
+    lastWorldChangeId = command.lastWorldChangeId;
 });
 
 addCommandRepeater("walk", (command) => {
@@ -316,6 +326,7 @@ class ConstantsRequest extends AjaxRequest {
         sproutStageAmount = data.sproutStageAmount;
         tileTypeIds = data.tileTypeIds;
         startTileChar = data.startTileChar;
+        playerEmotions = data.playerEmotions;
         worldPixelSize = worldSize * spriteSize;
         worldTilesLength = worldSize ** 2;
         this.callback();
@@ -348,7 +359,7 @@ class ClientDelegate {
     addCommandsBeforeUpdateRequest() {
         gameUpdateCommandList.push({
             commandName: "getState",
-            lastTileChangeId,
+            lastWorldChangeId,
             flip: localPlayerFlip,
         });
     }
@@ -362,11 +373,15 @@ class ClientDelegate {
         if (firstStepDelay <= 0) {
             tryWalk();
         }
+        const emotes = Array.from(usernameEmoteMap.values());
+        for (const emote of emotes) {
+            emote.timerEvent();
+        }
         if (bufferCanvasHasChanged) {
             context.imageSmoothingEnabled = false;
             context.drawImage(bufferCanvas, 0, 0, canvasWidth, canvasHeight);
             bufferCanvasHasChanged = false;
-            for (const playerTile of playerTiles) {
+            for (const playerTile of playerTileMap.values()) {
                 playerTile.drawName();
             }
         }

@@ -26,7 +26,11 @@ let bufferCanvasHasChanged = false;
 
 const backgroundColor = new Color(166, 196, 157);
 const backgroundColorString = backgroundColor.toString();
-const playerPalette = [new Color(0, 0, 0), new Color(255, 255, 255)];
+const playerPalettes = [
+    [new Color(0, 0, 0), new Color(255, 255, 255)],
+    [new Color(0, 128, 0), new Color(255, 255, 255)],
+    [new Color(128, 0, 0), new Color(255, 255, 255)],
+];
 const grassPalette = [new Color(136, 161, 129), null];
 const seedPalette = [new Color(133, 71, 0), null];
 const sproutPalette = [new Color(0, 97, 0), null];
@@ -66,7 +70,7 @@ const grassSpriteSets = [];
 const blockSpriteSets = [];
 const sproutSpriteSets = [];
 const flowerSpriteSets = [];
-let playerSpriteSet;
+const playerSpriteSets = [];
 
 const sproutSprites = [];
 const flowerSprites = [];
@@ -167,6 +171,9 @@ class Sprite {
 }
 
 const initializeSpriteSets = () => {
+    for (let index = 0; index < playerPalettes.length; index++) {
+        playerSpriteSets.push(new SpriteSet(index, [playerPalettes[index]], true));
+    }
     for (let texture = 0; texture < grassTextureAmount; texture++) {
         grassSpriteSets.push(new SpriteSet(32 + texture, [grassPalette], false));
     }
@@ -181,7 +188,6 @@ const initializeSpriteSets = () => {
         blockSpriteSets.push(new SpriteSet(24 + variation, palettes, false));
         flowerSpriteSets.push(new SpriteSet(16 + variation, palettes, false));
     }
-    playerSpriteSet = new SpriteSet(0, [playerPalette], true);
 };
 
 const initializeSpriteSheet = (done) => {
@@ -225,8 +231,10 @@ const initializeSpriteSheet = (done) => {
 };
 
 const initializeSprites = () => {
-    playerSprites.push(new Sprite(playerSpriteSet, 0, false));
-    playerSprites.push(new Sprite(playerSpriteSet, 0, true));
+    for (const spriteSet of playerSpriteSets) {
+        playerSprites.push(new Sprite(spriteSet, 0, false));
+        playerSprites.push(new Sprite(spriteSet, 0, true));
+    }
     for (const spriteSet of sproutSpriteSets) {
         sproutSprites.push(new Sprite(spriteSet, 0));
     }

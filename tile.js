@@ -1,6 +1,6 @@
 
 import * as fs from "fs";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty } from "./constants.js";
+import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty, playerEmotions } from "./constants.js";
 import { Pos, createPosFromJson } from "./pos.js";
 
 const worldTilesLength = worldSize ** 2;
@@ -8,9 +8,9 @@ const worldTilesLength = worldSize ** 2;
 const foregroundTiles = Array(worldTilesLength).fill(null);
 const backgroundTiles = Array(worldTilesLength).fill(null);
 // This is a circular buffer.
-const tileChanges = Array(1000).fill(null);
-let lastTileChangeId = 0;
-let lastTileChangeIndex = 0;
+const worldChanges = Array(1000).fill(null);
+let lastWorldChangeId = 0;
+let lastWorldChangeIndex = 0;
 const entityTileSet = new Set();
 // Map from username to PlayerTile.
 export const playerTileMap = new Map();
@@ -236,6 +236,10 @@ export class PlayerTile extends EntityTile {
         }
     }
     
+    emote(emotion) {
+        new EmoteChange(this.player.username, emotion);
+    }
+    
     buildTile(offset, getBuildTile) {
         const pos = this.pos.copy();
         pos.add(offset);
@@ -349,6 +353,7 @@ class FlowerTile extends EntityTile {
             playerTile.decreaseScore(sproutRemovalPenalty);
         } else if (this.isPoisonous) {
             playerTile.decreaseScore(poisonFlowerPenalty);
+            playerTile.emote(playerEmotions.sad);
             if (playerTile.player.username !== this.creatorUsername) {
                 const creatorTile = playerTileMap.get(this.creatorUsername);
                 if (typeof creatorTile !== "undefined") {
@@ -358,6 +363,7 @@ class FlowerTile extends EntityTile {
         } else {
             const pointAmount = flowerPointAmounts[this.tier];
             playerTile.increaseScore(pointAmount);
+            playerTile.emote(playerEmotions.happy);
         }
     }
     
@@ -376,23 +382,63 @@ class FlowerTile extends EntityTile {
     }
 }
 
-class TileChange {
+class WorldChange {
+    // Concrete subclasses of WorldChange must implement these methods:
+    // getTypeName, getJsonFields
     
-    constructor(isForeground, pos, typeId) {
-        this.isForeground = isForeground;
-        this.pos = pos;
-        this.typeId = typeId;
-        lastTileChangeId += 1;
-        this.id = lastTileChangeId;
-        lastTileChangeIndex = (lastTileChangeIndex + 1) % tileChanges.length;
-        tileChanges[lastTileChangeIndex] = this;
+    constructor() {
+        lastWorldChangeId += 1;
+        this.id = lastWorldChangeId;
+        lastWorldChangeIndex = (lastWorldChangeIndex + 1) % worldChanges.length;
+        worldChanges[lastWorldChangeIndex] = this;
     }
     
     toJson() {
         return {
+            type: this.getTypeName(),
+            ...this.getJsonFields(),
+        };
+    }
+}
+
+class TileChange extends WorldChange {
+    
+    constructor(isForeground, pos, tileTypeId) {
+        super();
+        this.isForeground = isForeground;
+        this.pos = pos;
+        this.tileTypeId = tileTypeId;
+    }
+    
+    getTypeName() {
+        return "tile";
+    }
+    
+    getJsonFields() {
+        return {
             isForeground: this.isForeground,
             pos: this.pos.toJson(),
-            typeId: this.typeId,
+            tileTypeId: this.tileTypeId,
+        };
+    }
+}
+
+class EmoteChange extends WorldChange {
+    
+    constructor(username, emotion) {
+        super();
+        this.username = username;
+        this.emotion = emotion;
+    }
+    
+    getTypeName() {
+        return "emote";
+    }
+    
+    getJsonFields() {
+        return {
+            username: this.username,
+            emotion: this.emotion,
         };
     }
 }
@@ -523,28 +569,28 @@ export const encodeWorldTiles = () => {
     return chars.join("");
 };
 
-export const getTileChanges = (startChangeId) => {
-    if (lastTileChangeId - startChangeId > tileChanges.length - 5) {
+export const getWorldChanges = (startChangeId) => {
+    if (lastWorldChangeId - startChangeId > worldChanges.length - 5) {
         return null;
     }
     const output = [];
-    let index = lastTileChangeIndex;
+    let index = lastWorldChangeIndex;
     while (true) {
-        const tileChange = tileChanges[index];
-        if (tileChange === null || tileChange.id < startChangeId) {
+        const worldChange = worldChanges[index];
+        if (worldChange === null || worldChange.id < startChangeId) {
             break;
         }
-        output.push(tileChange);
+        output.push(worldChange);
         index -= 1;
         if (index < 0) {
-            index = tileChanges.length - 1;
+            index = worldChanges.length - 1;
         }
     }
     output.reverse();
     return output;
 };
 
-export const getLastTileChangeId = () => lastTileChangeId;
+export const getLastWorldChangeId = () => lastWorldChangeId;
 
 export const createSproutTile = (creatorUsername, isPoisonous, tier) => new FlowerTile({
     creatorUsername, isPoisonous, tier, age: 0,
