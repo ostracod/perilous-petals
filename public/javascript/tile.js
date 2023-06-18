@@ -82,7 +82,9 @@ class BlockTile extends ForegroundTile {
     constructor(tier) {
         super(tileTypeIds.block + tier);
         this.tier = tier;
-        this.sprite = new Sprite(blockSpriteSet, this.tier);
+        const spriteSet = blockSpriteSets[Math.floor(this.tier / flowerColorsPerVariation)];
+        const paletteIndex = this.tier % flowerColorsPerVariation;
+        this.sprite = new Sprite(spriteSet, paletteIndex);
     }
     
     playerCanRemove() {
@@ -279,7 +281,7 @@ const drawTile = (pos) => {
         const backgroundTile = backgroundTiles[index];
         sprite = backgroundTile.sprite;
     }
-    if (sprite === null) {
+    if (sprite === null || sprite.hasBackground) {
         bufferContext.fillStyle = backgroundColorString;
         bufferContext.fillRect(
             pos.x * spriteSize,
@@ -287,7 +289,8 @@ const drawTile = (pos) => {
             spriteSize,
             spriteSize,
         );
-    } else {
+    }
+    if (sprite !== null) {
         sprite.draw(bufferContext, 1, pos);
     }
     bufferCanvasHasChanged = true;

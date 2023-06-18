@@ -24,15 +24,49 @@ let bufferCanvas;
 let bufferContext;
 let bufferCanvasHasChanged = false;
 
-const backgroundColor = new Color(255, 255, 255);
+const backgroundColor = new Color(166, 196, 157);
 const backgroundColorString = backgroundColor.toString();
+const grassPalette = [new Color(136, 161, 129), null];
+const seedPalette = [new Color(133, 71, 0), null];
+const sproutPalette = [new Color(0, 97, 0), null];
 const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
 const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
+const tierPalettes = [
+    [new Color(255, 0, 0), new Color(255, 192, 192)],
+    [new Color(255, 128, 0), new Color(255, 224, 192)],
+    [new Color(255, 255, 0), new Color(208, 208, 0)],
+    [new Color(0, 255, 0), new Color(208, 255, 208)],
+    [new Color(0, 255, 255), new Color(208, 255, 255)],
+    [new Color(0, 0, 255), new Color(192, 192, 255)],
+    [new Color(255, 0, 255), new Color(255, 192, 255)],
+    [new Color(255, 255, 255), new Color(208, 208, 208)],
+    
+    [new Color(192, 0, 0), new Color(255, 128, 128)],
+    [new Color(192, 96, 0), new Color(255, 128, 0)],
+    [new Color(128, 128, 0), new Color(192, 192, 0)],
+    [new Color(0, 128, 0), new Color(0, 208, 0)],
+    [new Color(0, 128, 128), new Color(0, 208, 208)],
+    [new Color(0, 0, 192), new Color(160, 160, 255)],
+    [new Color(192, 0, 192), new Color(255, 128, 255)],
+    [new Color(0, 0, 0), new Color(160, 160, 160)],
+    
+    [new Color(255, 0, 0), new Color(255, 255, 0)],
+    [new Color(255, 128, 0), new Color(0, 255, 0)],
+    [new Color(255, 255, 0), new Color(0, 192, 192)],
+    [new Color(0, 255, 0), new Color(64, 64, 255)],
+    [new Color(0, 255, 255), new Color(255, 0, 255)],
+    [new Color(0, 0, 255), new Color(255, 0, 0)],
+    [new Color(255, 0, 255), new Color(255, 192, 64)],
+    [new Color(128, 128, 128), new Color(192, 192, 192)],
+];
+
+const flowerVariationAmount = 3;
+const flowerColorsPerVariation = 8;
 
 const grassSpriteSets = [];
-let blockSpriteSet;
+const blockSpriteSets = [];
 const sproutSpriteSets = [];
-let flowerSpriteSets;
+const flowerSpriteSets = [];
 let playerSpriteSet;
 
 const sproutSprites = [];
@@ -49,6 +83,7 @@ class SpriteSet {
         this.imageMap = new Map();
         this.flippedImageMap = this.canFlip ? new Map() : null;
         this.images = [];
+        this.hasBackground = false;
         spriteSets.push(this);
     }
     
@@ -75,11 +110,12 @@ class SpriteSet {
                 } else if (colorR < 224) {
                     color = palette[1];
                 } else {
-                    color = backgroundColor;
+                    color = null;
                 }
                 index = (offsetX + offsetY * spriteSize) * 4;
                 if (color === null) {
                     spriteImageDataList[index + 3] = 0;
+                    this.hasBackground = true;
                 } else {
                     spriteImageDataList[index] = color.r;
                     spriteImageDataList[index + 1] = color.g;
@@ -123,6 +159,7 @@ class Sprite {
     
     constructor(spriteSet, paletteIndex = 0, flip = false) {
         this.image = spriteSet.getImage(paletteIndex, flip);
+        this.hasBackground = spriteSet.hasBackground;
     }
     
     draw(context, scale, pos) {
@@ -132,13 +169,19 @@ class Sprite {
 
 const initializeSpriteSets = () => {
     for (let texture = 0; texture < grassTextureAmount; texture++) {
-        grassSpriteSets.push(new SpriteSet(32 + texture, [dummyPalette1], false));
+        grassSpriteSets.push(new SpriteSet(32 + texture, [grassPalette], false));
     }
-    blockSpriteSet = new SpriteSet(24, [dummyPalette1, dummyPalette2], false);
     for (let stage = 0; stage < sproutStageAmount; stage += 1) {
-        sproutSpriteSets.push(new SpriteSet(8 + stage, [dummyPalette1], false));
+        const palette = (stage <= 0) ? seedPalette : sproutPalette;
+        sproutSpriteSets.push(new SpriteSet(8 + stage, [palette], false));
     }
-    flowerSpriteSets = [new SpriteSet(16, [dummyPalette1, dummyPalette2], false)];
+    for (let variation = 0; variation < flowerVariationAmount; variation++) {
+        const startIndex = variation * flowerColorsPerVariation;
+        const endIndex = startIndex + flowerColorsPerVariation;
+        const palettes = tierPalettes.slice(startIndex, endIndex);
+        blockSpriteSets.push(new SpriteSet(24 + variation, palettes, false));
+        flowerSpriteSets.push(new SpriteSet(16 + variation, palettes, false));
+    }
     playerSpriteSet = new SpriteSet(0, [dummyPalette1], true);
 };
 
@@ -187,9 +230,12 @@ const initializeSprites = () => {
     for (const spriteSet of sproutSpriteSets) {
         sproutSprites.push(new Sprite(spriteSet, 0));
     }
-    const flowerSpriteSet = flowerSpriteSets[0];
-    flowerSprites.push(new Sprite(flowerSpriteSet, 0));
-    flowerSprites.push(new Sprite(flowerSpriteSet, 1));
+    for (let variation = 0; variation < flowerVariationAmount; variation++) {
+        const flowerSpriteSet = flowerSpriteSets[variation];
+        for (let paletteIndex = 0; paletteIndex < flowerColorsPerVariation; paletteIndex++) {
+            flowerSprites.push(new Sprite(flowerSpriteSet, paletteIndex));
+        }
+    }
 };
 
 const initializeBufferCanvas = () => {
@@ -209,7 +255,7 @@ const drawSpriteImage = (context, scale, pos, image) => {
     );
 };
 
-const createCanvasWithSprite = (parentTag, sprite, scale) => {
+const createCanvasWithSprite = (parentTag, sprite, scale, color = null) => {
     const output = document.createElement("canvas");
     const size = spriteSize * scale;
     output.width = size;
@@ -218,6 +264,14 @@ const createCanvasWithSprite = (parentTag, sprite, scale) => {
     output.style.height = size / 2;
     parentTag.appendChild(output);
     const context = output.getContext("2d");
+    if (color === null) {
+        output.style.border = "3px #FFFFFF solid";
+    } else {
+        const colorString = color.toString();
+        output.style.border = `3px ${colorString} solid`;
+        context.fillStyle = colorString;
+        context.fillRect(0, 0, size, size);
+    }
     sprite.draw(context, scale, new Pos(0, 0));
     return output;
 };

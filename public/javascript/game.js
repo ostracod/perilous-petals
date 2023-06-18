@@ -9,7 +9,7 @@ let firstStepDelay = 0;
 
 class BuildItem {
     // Concrete subclasses of BuildItem must implement these methods:
-    // getDisplayName, getSprite, getTile, getCommandName, getCommandFields
+    // getDisplayName, getSprite, getTile, getCommandName, getCommandFields, spriteIsWhite
     
     constructor() {
         this.index = buildItems.length;
@@ -25,17 +25,18 @@ class BuildItem {
         this.tag = document.createElement("div");
         const sprite = this.getSprite();
         if (sprite !== null) {
-            const spriteCanvas = createCanvasWithSprite(this.tag, sprite, 6);
+            const color = this.spriteIsWhite() ? new Color(192, 192, 192) : null;
+            const spriteCanvas = createCanvasWithSprite(this.tag, sprite, 6, color);
             spriteCanvas.style.marginRight = 8;
         }
         const spanTag = document.createElement("span");
         spanTag.innerHTML = this.getDisplayName();
         if (sprite !== null) {
-            spanTag.style.verticalAlign = 6;
+            spanTag.style.verticalAlign = 9;
         }
         this.tag.appendChild(spanTag);
         this.updateBorderStyle();
-        this.tag.style.padding = "5px";
+        this.tag.style.padding = "2px";
         this.tag.style.cursor = "pointer";
         this.tag.onclick = () => {
             this.select();
@@ -86,7 +87,7 @@ class SproutBuildItem extends BuildItem {
     }
     
     getSprite() {
-        return sproutSprites[2];
+        return (this.tier === null) ? sproutSprites[2] : flowerSprites[this.tier];
     }
     
     getTile() {
@@ -102,6 +103,10 @@ class SproutBuildItem extends BuildItem {
             isPoisonous: this.isPoisonous,
             tier: this.tier,
         };
+    }
+    
+    spriteIsWhite() {
+        return (this.tier === 7);
     }
 }
 
@@ -132,15 +137,21 @@ class BlockBuildItem extends BuildItem {
     getCommandFields() {
         return { tier: this.tier };
     }
+    
+    spriteIsWhite() {
+        return (this.tier === 7);
+    }
 }
 
 const initializeBuildItems = () => {
-    new BlockBuildItem(0);
-    new BlockBuildItem(1);
     new SproutBuildItem(false);
     new SproutBuildItem(true);
-    new SproutBuildItem(true, 0);
-    new SproutBuildItem(true, 1);
+    for (let tier = 0; tier < tierAmount; tier++) {
+        new SproutBuildItem(true, tier);
+    }
+    for (let tier = 0; tier < tierAmount; tier++) {
+        new BlockBuildItem(tier);
+    }
     for (const buildItem of buildItems) {
         buildItem.createTag();
     }
