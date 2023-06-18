@@ -158,7 +158,17 @@ const initializeBuildItems = () => {
     buildItems[0].select();
 };
 
+const setLocalPlayerFlip = (offset) => {
+    if (offset.x === 0) {
+        return;
+    }
+    localPlayerFlip = (offset.x < 0);
+    localPlayerTile.flip = localPlayerFlip;
+    localPlayerTile.redraw();
+};
+
 const tryWalk = () => {
+    setLocalPlayerFlip(walkOffset);
     if ((walkOffset.x === 0 && walkOffset.y === 0)
             || localPlayerTile === null || walkDelay > 0) {
         return;
@@ -189,6 +199,7 @@ const startWalk = (offset) => {
 };
 
 const buildInDirection = (offset) => {
+    setLocalPlayerFlip(offset);
     const pos = localPlayerTile.pos.copy();
     pos.add(offset);
     if (!posIsInWorld(pos)) {
@@ -265,8 +276,7 @@ addCommandListener("setState", (command) => {
     playerTiles = [];
     localPlayerTile = null;
     for (const playerData of command.players) {
-        const pos = createPosFromJson(playerData.pos);
-        new PlayerTile(playerData.username, playerData.level, pos);
+        new PlayerTile(playerData);
     }
     lastTileChangeId = command.lastTileChangeId;
 });
@@ -339,6 +349,7 @@ class ClientDelegate {
         gameUpdateCommandList.push({
             commandName: "getState",
             lastTileChangeId,
+            flip: localPlayerFlip,
         });
     }
     

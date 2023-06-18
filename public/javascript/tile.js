@@ -24,6 +24,7 @@ const flowerTiles = [];
 let playerTiles = [];
 let localPlayerTile = null;
 let localPlayerUsername;
+let localPlayerFlip = false;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -132,16 +133,29 @@ class EntityTile extends ForegroundTile {
 
 class PlayerTile extends EntityTile {
     
-    constructor(username, level, pos) {
+    constructor(data) {
+        const pos = createPosFromJson(data.pos);
         super(tileTypeIds.empty, pos);
-        this.username = username;
-        this.level = level;
-        this.sprite = playerSprite;
-        setTile(true, this.pos, this, false);
-        playerTiles.push(this);
+        this.username = data.username;
+        this.level = data.level;
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
+            this.flip = localPlayerFlip;
+        } else {
+            this.flip = data.flip;
         }
+        this.updateSprite();
+        setTile(true, this.pos, this, false);
+        playerTiles.push(this);
+    }
+    
+    updateSprite() {
+        this.sprite = this.flip ? playerSprites[1] : playerSprites[0];
+    }
+    
+    redraw() {
+        this.updateSprite();
+        drawTile(this.pos);
     }
     
     drawName() {

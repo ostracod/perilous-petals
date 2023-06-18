@@ -187,6 +187,7 @@ export class PlayerTile extends EntityTile {
     constructor(player) {
         super(tileTypeIds.empty);
         this.player = player;
+        this.flip = false;
     }
     
     addEvent(isForeground, pos) {
@@ -202,6 +203,17 @@ export class PlayerTile extends EntityTile {
     addToWorld() {
         const { posX, posY } = this.player.extraFields;
         const pos = new Pos(posX ?? 0, posY ?? 0);
+        for (let count = 0; count < 400; count++) {
+            const tile = getTile(true, pos);
+            if (tile instanceof EmptyTile) {
+                break;
+            }
+            if (count > 200 && tile.playerCanRemove()) {
+                break;
+            }
+            pos.x = Math.floor(Math.random() * worldSize);
+            pos.y = Math.floor(Math.random() * worldSize);
+        }
         setTile(true, pos, this);
     }
     
@@ -269,6 +281,11 @@ export class PlayerTile extends EntityTile {
         this.player.score = Math.max(score - amount, 0);
     }
     
+    persistEvent() {
+        this.player.extraFields.posX = this.pos.x;
+        this.player.extraFields.posY = this.pos.y;
+    }
+    
     toDbJson() {
         return emptyTile.toDbJson();
     }
@@ -278,6 +295,7 @@ export class PlayerTile extends EntityTile {
             username: this.player.username,
             level: this.player.extraFields.level,
             pos: this.pos.toJson(),
+            flip: this.flip,
         }
     }
 }

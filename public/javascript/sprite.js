@@ -26,11 +26,10 @@ let bufferCanvasHasChanged = false;
 
 const backgroundColor = new Color(166, 196, 157);
 const backgroundColorString = backgroundColor.toString();
+const playerPalette = [new Color(0, 0, 0), new Color(255, 255, 255)];
 const grassPalette = [new Color(136, 161, 129), null];
 const seedPalette = [new Color(133, 71, 0), null];
 const sproutPalette = [new Color(0, 97, 0), null];
-const dummyPalette1 = [new Color(0, 0, 0), new Color(255, 255, 255)];
-const dummyPalette2 = [new Color(0, 0, 255), new Color(255, 255, 255)];
 const tierPalettes = [
     [new Color(255, 0, 0), new Color(255, 192, 192)],
     [new Color(255, 128, 0), new Color(255, 224, 192)],
@@ -71,7 +70,7 @@ let playerSpriteSet;
 
 const sproutSprites = [];
 const flowerSprites = [];
-let playerSprite;
+const playerSprites = [];
 
 class SpriteSet {
     
@@ -182,7 +181,7 @@ const initializeSpriteSets = () => {
         blockSpriteSets.push(new SpriteSet(24 + variation, palettes, false));
         flowerSpriteSets.push(new SpriteSet(16 + variation, palettes, false));
     }
-    playerSpriteSet = new SpriteSet(0, [dummyPalette1], true);
+    playerSpriteSet = new SpriteSet(0, [playerPalette], true);
 };
 
 const initializeSpriteSheet = (done) => {
@@ -226,7 +225,8 @@ const initializeSpriteSheet = (done) => {
 };
 
 const initializeSprites = () => {
-    playerSprite = new Sprite(playerSpriteSet, 0, false);
+    playerSprites.push(new Sprite(playerSpriteSet, 0, false));
+    playerSprites.push(new Sprite(playerSpriteSet, 0, true));
     for (const spriteSet of sproutSpriteSets) {
         sproutSprites.push(new Sprite(spriteSet, 0));
     }

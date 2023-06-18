@@ -6,6 +6,8 @@ import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles,
 initWorldTiles();
 
 gameUtils.addCommandListener("getState", true, (command, player, outputCommands) => {
+    const playerTile = playerTileMap.get(player.username);
+    playerTile.flip = command.flip;
     const playerTiles = Array.from(playerTileMap.values());
     const outputCommand = {
         commandName: "setState",
@@ -74,6 +76,9 @@ class GameDelegate {
     
     async persistEvent() {
         writeWorldTiles();
+        for (let playerTile of playerTileMap.values()) {
+            playerTile.persistEvent();
+        }
     }
 }
 
