@@ -1,4 +1,33 @@
 
+const flowerNames = [
+    "Rose",
+    "Lily",
+    "Marigold",
+    "Carnation",
+    "Hydrangea",
+    "Iris",
+    "Petunia",
+    "Daisy",
+    
+    "Poppy",
+    "Calendula",
+    "Daffodil",
+    "Chrysanthemum",
+    "Brunnera",
+    "Lupine",
+    "Lilac",
+    "Hyacinth",
+    
+    "Alstroemeria",
+    "Montbretia",
+    "Zinnia",
+    "Dahlia",
+    "Lobelia",
+    "Salvia",
+    "Fuchsia",
+    "Artemisia",
+];
+
 const buildItems = [];
 let selectedBuildItem = null;
 
@@ -86,7 +115,7 @@ class SproutBuildItem extends BuildItem {
     }
     
     getDisplayName() {
-        let output = ((this.tier === null) ? "Flower" : this.tier) + " Seed";
+        let output = ((this.tier === null) ? "Flower" : flowerNames[this.tier]) + " Seed";
         if (this.isPoisonous) {
             output = "Poison " + output;
         }
@@ -126,7 +155,7 @@ class BlockBuildItem extends BuildItem {
     }
     
     getDisplayName() {
-        return "Block " + this.tier;
+        return flowerNames[this.tier] + " Block";
     }
     
     getSprite() {
