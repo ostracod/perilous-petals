@@ -1,5 +1,6 @@
 
 import * as fs from "fs";
+import * as crypto from "crypto";
 import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty, playerEmotions } from "./constants.js";
 import { Pos, createPosFromJson } from "./pos.js";
 
@@ -180,6 +181,10 @@ class EntityTile extends Tile {
     timerEvent() {
         // Do nothing.
     }
+    
+    deleteFromWorld() {
+        setTile(true, this.pos, emptyTile);
+    }
 }
 
 export class PlayerTile extends EntityTile {
@@ -217,10 +222,6 @@ export class PlayerTile extends EntityTile {
         setTile(true, pos, this);
     }
     
-    deleteFromWorld() {
-        setTile(true, this.pos, emptyTile);
-    }
-    
     walk(offset) {
         const nextPos = this.pos.copy();
         nextPos.add(offset);
@@ -238,6 +239,29 @@ export class PlayerTile extends EntityTile {
     
     emote(emotion) {
         new EmoteChange(this.player.username, emotion);
+    }
+    
+    createSproutTile(isPoisonous, tier) {
+        if (tier === null) {
+            const intArray = new Uint32Array(1);
+            crypto.getRandomValues(intArray)
+            const randomInt = intArray[0];
+            let mask = 1;
+            for (tier = 0; tier < tierAmount - 1; tier++) {
+                if (randomInt & mask) {
+                    break;
+                }
+                mask <<= 1;
+            }
+        }
+        tier = Math.min(tier, this.player.extraFields.level - 1);
+        return new FlowerTile({
+            creatorUsername: this.player.username,
+            isPoisonous,
+            tier,
+            age: 0,
+            growthDelay: 50 + Math.floor(50 * Math.random()),
+        });
     }
     
     buildTile(offset, getBuildTile) {
@@ -282,7 +306,11 @@ export class PlayerTile extends EntityTile {
     
     decreaseScore(amount) {
         const { score } = this.player;
-        this.player.score = Math.max(score - amount, 0);
+        if (amount > score) {
+            amount = score;
+        }
+        this.player.score = score - amount;
+        return amount;
     }
     
     persistEvent() {
@@ -312,10 +340,12 @@ class FlowerTile extends EntityTile {
         this.isPoisonous = data.isPoisonous;
         this.tier = data.tier;
         this.age = data.age;
+        this.growthDelay = data.growthDelay;
+        this.maxAge = this.growthDelay * sproutStageAmount + 600;
     }
     
     getStage() {
-        return Math.min(Math.floor(this.age / 20), sproutStageAmount);
+        return Math.min(Math.floor(this.age / this.growthDelay), sproutStageAmount);
     }
     
     isSprout() {
@@ -325,6 +355,10 @@ class FlowerTile extends EntityTile {
     timerEvent() {
         super.timerEvent();
         this.age += 1;
+        if (this.age > this.maxAge) {
+            this.deleteFromWorld();
+            return;
+        }
         const stage = this.getStage();
         let typeId;
         if (flowerStageIsSprout(stage)) {
@@ -352,12 +386,12 @@ class FlowerTile extends EntityTile {
         if (this.isSprout()) {
             playerTile.decreaseScore(sproutRemovalPenalty);
         } else if (this.isPoisonous) {
-            playerTile.decreaseScore(poisonFlowerPenalty);
+            const pointAmount = playerTile.decreaseScore(poisonFlowerPenalty);
             playerTile.emote(playerEmotions.sad);
             if (playerTile.player.username !== this.creatorUsername) {
                 const creatorTile = playerTileMap.get(this.creatorUsername);
                 if (typeof creatorTile !== "undefined") {
-                    creatorTile.increaseScore(poisonFlowerPenalty);
+                    creatorTile.increaseScore(pointAmount);
                 }
             }
         } else {
@@ -378,6 +412,7 @@ class FlowerTile extends EntityTile {
             isPoisonous: this.isPoisonous,
             tier: this.tier,
             age: this.age,
+            growthDelay: this.growthDelay,
         };
     }
 }
@@ -591,10 +626,6 @@ export const getWorldChanges = (startChangeId) => {
 };
 
 export const getLastWorldChangeId = () => lastWorldChangeId;
-
-export const createSproutTile = (creatorUsername, isPoisonous, tier) => new FlowerTile({
-    creatorUsername, isPoisonous, tier, age: 0,
-});
 
 const flowerStageIsSprout = (stage) => (stage < sproutStageAmount);
 

@@ -1,7 +1,7 @@
 
 import { gameUtils } from "ostracod-multiplayer";
 import { createPosFromJson } from "./pos.js";
-import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, createSproutTile, tilesTimerEvent } from "./tile.js";
+import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent } from "./tile.js";
 
 initWorldTiles();
 
@@ -43,9 +43,8 @@ gameUtils.addCommandListener("placeBlock", true, (command, player, outputCommand
 gameUtils.addCommandListener("placeSprout", true, (command, player, outputCommands) => {
     const playerTile = playerTileMap.get(player.username);
     const offset = createPosFromJson(command.offset);
-    const tier = command.tier ?? 0;
     playerTile.buildTile(offset, () => (
-        createSproutTile(player.username, command.isPoisonous, tier)
+        playerTile.createSproutTile(command.isPoisonous, command.tier)
     ));
 });
 
