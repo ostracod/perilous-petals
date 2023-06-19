@@ -232,7 +232,7 @@ class PlayerStat {
     
     setCount(count) {
         this.count = count;
-        this.countTag.innerHTML = this.count;
+        this.countTag.innerHTML = "x" + this.count;
         this.tag.style.display = "";
     }
 }
@@ -261,7 +261,21 @@ const initializeBuildItems = () => {
 };
 
 const initializeStats = () => {
-    new PlayerStat("blocksPlaced", "Blocks placed");
+    new PlayerStat("regularPlanted", "Regular seed planted");
+    new PlayerStat("poisonPlanted", "Poison seed planted");
+    for (let tier = 0; tier < tierAmount; tier++) {
+        new PlayerStat(`regular${tier}Picked`, flowerNames[tier] + " picked");
+    }
+    new PlayerStat("youStole", "You stole their flower");
+    new PlayerStat("theyStole", "They stole your flower");
+    new PlayerStat("youSabotaged", "You poisoned them");
+    new PlayerStat("theySabotaged", "They poisoned you");
+    new PlayerStat("selfSabotaged", "You poisoned yourself");
+    new PlayerStat("sproutsDestroyed", "Sprout destroyed");
+    new PlayerStat("regularWithered", "Regular flower withered");
+    new PlayerStat("poisonWithered", "Poison flower withered");
+    new PlayerStat("blocksPlaced", "Block placed");
+    new PlayerStat("blocksRemoved", "Block removed");
 };
 
 const updateBuildItemsVisibility = () => {

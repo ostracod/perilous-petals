@@ -138,7 +138,13 @@ class BlockTile extends Tile {
     }
     
     playerBuildEvent(playerTile) {
+        super.playerBuildEvent(playerTile);
         playerTile.incrementStat("blocksPlaced");
+    }
+    
+    playerRemoveEvent(playerTile) {
+        super.playerRemoveEvent(playerTile);
+        playerTile.incrementStat("blocksRemoved");
     }
     
     toDbJson() {
@@ -206,7 +212,7 @@ export class PlayerTile extends EntityTile {
         } else {
             this.stats = JSON.parse(statsText);
         }
-        this.changedStats = new Set(Object.keys(this.stats));
+        this.clearStatChanges();
     }
     
     addEvent(isForeground, pos) {
@@ -220,6 +226,7 @@ export class PlayerTile extends EntityTile {
     }
     
     timerEvent() {
+        super.timerEvent();
         if (this.walkBudget < maxWalkBudget) {
             this.walkBudget += 1;
         }
@@ -351,6 +358,10 @@ export class PlayerTile extends EntityTile {
         this.changedStats.add(name);
     }
     
+    clearStatChanges() {
+        this.changedStats = new Set();
+    }
+    
     persistEvent() {
         this.player.extraFields.posX = this.pos.x;
         this.player.extraFields.posY = this.pos.y;
@@ -396,6 +407,11 @@ class FlowerTile extends EntityTile {
         super.timerEvent();
         this.age += 1;
         if (this.age > this.maxAge) {
+            const creatorTile = this.getCreatorTile();
+            if (creatorTile !== null) {
+                const statName = this.isPoisonous ? "poisonWithered" : "regularWithered";
+                creatorTile.incrementStat(statName);
+            }
             this.deleteFromWorld();
             return;
         }
@@ -414,30 +430,51 @@ class FlowerTile extends EntityTile {
     }
     
     playerBuildEvent(playerTile) {
+        super.playerBuildEvent(playerTile);
         playerTile.decreaseScore(sproutBuildCost);
+        const statName = this.isPoisonous ? "poisonPlanted" : "regularPlanted";
+        playerTile.incrementStat(statName);
     }
     
     playerCanRemove() {
         return true;
     }
     
+    getCreatorTile() {
+        const playerTile = playerTileMap.get(this.creatorUsername);
+        return (typeof playerTile === "undefined") ? null : playerTile;
+    }
+    
     playerRemoveEvent(playerTile) {
         super.playerRemoveEvent(playerTile);
+        const isCreator = (playerTile.player.username === this.creatorUsername);
+        const creatorTile = this.getCreatorTile();
         if (this.isSprout()) {
             playerTile.decreaseScore(sproutRemovalPenalty);
+            playerTile.incrementStat("sproutsDestroyed");
         } else if (this.isPoisonous) {
             const pointAmount = playerTile.decreaseScore(poisonFlowerPenalty);
             playerTile.emote(playerEmotions.sad);
-            if (playerTile.player.username !== this.creatorUsername) {
-                const creatorTile = playerTileMap.get(this.creatorUsername);
-                if (typeof creatorTile !== "undefined") {
+            if (isCreator) {
+                playerTile.incrementStat("selfSabotaged");
+            } else {
+                playerTile.incrementStat("theySabotaged");
+                if (creatorTile !== null) {
                     creatorTile.increaseScore(pointAmount);
+                    creatorTile.incrementStat("youSabotaged");
                 }
             }
         } else {
             const pointAmount = flowerPointAmounts[this.tier];
             playerTile.increaseScore(pointAmount);
+            playerTile.incrementStat(`regular${this.tier}Picked`);
             playerTile.emote(playerEmotions.happy);
+            if (!isCreator) {
+                playerTile.incrementStat("youStole");
+                if (creatorTile !== null) {
+                    creatorTile.incrementStat("theyStole");
+                }
+            }
         }
     }
     
