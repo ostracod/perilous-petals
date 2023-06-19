@@ -205,14 +205,13 @@ class PlayerTile extends EntityTile {
             return false;
         }
         const nextTile = getTile(true, nextPos);
-        if (nextTile.playerCanWalkOn()) {
-            setTile(true, this.pos, emptyTile, false);
-            this.pos.set(nextPos);
-            setTile(true, this.pos, this, false);
-            return true;
-        } else {
+        if (!nextTile.playerCanWalkOn()) {
             return false;
         }
+        setTile(true, this.pos, emptyTile, false);
+        this.pos.set(nextPos);
+        setTile(true, this.pos, this, false);
+        return true;
     }
 }
 

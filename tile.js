@@ -19,6 +19,7 @@ const entityTileSet = new Set();
 export const playerTileMap = new Map();
 let emptyForegroundTileCount = 0;
 let grassTileCount = 0;
+let nextBotId = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -240,16 +241,17 @@ class PlayerTile extends EntityTile {
         const nextPos = this.pos.copy();
         nextPos.add(offset);
         if (!posIsInWorld(nextPos)) {
-            return;
+            return false;
         }
         const nextTile = getTile(true, nextPos);
         if (!nextTile.playerCanWalkOn()) {
-            return;
+            return false;
         }
         if (nextTile.playerCanRemove()) {
             this.removeTile(offset);
         }
         swapForegroundTiles(this.pos, nextPos);
+        return true;
     }
     
     emote(emotion) {
@@ -417,8 +419,71 @@ export class HumanPlayerTile extends PlayerTile {
 }
 
 class BotPlayerTile extends PlayerTile {
-    // TODO: Implement.
     
+    constructor(displayName) {
+        const id = nextBotId;
+        nextBotId += 1;
+        super("bot," + id, displayName);
+        this.actDelay = 0;
+        this.direction = 1;
+    }
+    
+    timerEvent() {
+        this.actDelay += 1;
+        if (this.actDelay > 3) {
+            const offset = new Pos(this.direction, 0);
+            const hasWalked = this.walk(offset);
+            if (!hasWalked) {
+                this.direction *= -1;
+            }
+            this.actDelay = 0;
+        }
+    }
+    
+    setFlip(offset) {
+        if (offset.x !== 0) {
+            this.flip = (offset.x < 0);
+        }
+    }
+    
+    getInitPos() {
+        return new Pos(3, 3);
+    }
+    
+    getLevel() {
+        return 7;
+    }
+    
+    getScore() {
+        return 0;
+    }
+    
+    increaseScore(amount) {
+        // Do nothing.
+    }
+    
+    decreaseScore(amount) {
+        return amount;
+    }
+    
+    incrementStat(name) {
+        // Do nothing.
+    }
+    
+    walk(offset) {
+        this.setFlip(offset);
+        return super.walk(offset);
+    }
+    
+    buildTile(offset, getBuildTile) {
+        this.setFlip(offset);
+        super.buildTile(offset, getBuildTile);
+    }
+    
+    removeTile(offset) {
+        this.setFlip(offset);
+        super.removeTile(offset);
+    }
 }
 
 class FlowerTile extends EntityTile {
@@ -696,6 +761,8 @@ export const initWorldTiles = () => {
     } else {
         createWorldTiles();
     }
+    const botPlayerTile = new BotPlayerTile("bot");
+    botPlayerTile.addToWorld();
 };
 
 export const writeWorldTiles = () => {
