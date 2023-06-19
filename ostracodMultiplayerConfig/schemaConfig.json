@@ -36,6 +36,14 @@
                 {
                     "name": "posY",
                     "type": "INT"
+                },
+                {
+                    "name": "hotbar",
+                    "type": "TEXT"
+                },
+                {
+                    "name": "stats",
+                    "type": "TEXT"
                 }
             ]
         }

@@ -30,6 +30,7 @@ const flowerNames = [
 
 const buildItems = [];
 let selectedBuildItem = null;
+const hotbar = Array(10).fill(null);
 
 const walkOffset = new Pos(0, 0);
 let walkDelay = 0;
@@ -38,11 +39,11 @@ let firstStepDelay = 0;
 
 class BuildItem {
     // Concrete subclasses of BuildItem must implement these methods:
-    // getDisplayName, getSprite, getTile, getCommandName, getCommandFields, spriteIsWhite
+    // getDisplayName, getSprite, getTile, getCommandName, getCommandFields,
+    // spriteIsWhite, matchesCommandHelper
     
     constructor(minLevel) {
         this.minLevel = minLevel;
-        this.index = buildItems.length;
         buildItems.push(this);
     }
     
@@ -64,12 +65,16 @@ class BuildItem {
             const spriteCanvas = createCanvasWithSprite(this.tag, sprite, 6, color);
             spriteCanvas.style.marginRight = 8;
         }
+        const divTag = document.createElement("div");
+        divTag.style.display = "inline-block";
+        if (sprite !== null) {
+            divTag.style.verticalAlign = 9;
+        }
+        this.hotbarTag = document.createElement("span");
+        divTag.appendChild(this.hotbarTag);
         const spanTag = document.createElement("span");
         spanTag.innerHTML = this.getDisplayName();
-        if (sprite !== null) {
-            spanTag.style.verticalAlign = 9;
-        }
-        this.tag.appendChild(spanTag);
+        divTag.appendChild(spanTag);
         this.updateBorderStyle();
         this.updateVisibility();
         this.tag.style.padding = "3px";
@@ -78,6 +83,7 @@ class BuildItem {
             this.select();
         };
         this.tag.onmousedown = () => false;
+        this.tag.appendChild(divTag)
         document.getElementById("buildItemsContainer").appendChild(this.tag);
     }
     
@@ -96,13 +102,30 @@ class BuildItem {
         }
     }
     
+    setHotbarText(index) {
+        const text = (index === null) ? "" : `(${index}) `;
+        this.hotbarTag.innerHTML = text;
+    }
+    
+    getBaseCommand() {
+        return {
+            commandName: this.getCommandName(),
+            ...this.getCommandFields(),
+        }
+    }
+    
     sendCommand(offset) {
         gameUpdateCommandList.push({
-            commandName: this.getCommandName(),
+            ...this.getBaseCommand(),
             offset: offset.toJson(),
-            ...this.getCommandFields(),
-            buildItemIndex: this.index,
         });
+    }
+    
+    matchesCommand(command) {
+        if (command.commandName !== this.getCommandName()) {
+            return false;
+        }
+        return this.matchesCommandHelper(command);
     }
 }
 
@@ -144,6 +167,10 @@ class SproutBuildItem extends BuildItem {
     spriteIsWhite() {
         return (this.tier === 7);
     }
+    
+    matchesCommandHelper(command) {
+        return (command.isPoisonous === this.isPoisonous && command.tier === this.tier);
+    }
 }
 
 class BlockBuildItem extends BuildItem {
@@ -177,6 +204,10 @@ class BlockBuildItem extends BuildItem {
     spriteIsWhite() {
         return (this.tier === 7);
     }
+    
+    matchesCommandHelper(command) {
+        return (command.tier === this.tier);
+    }
 }
 
 const initializeBuildItems = () => {
@@ -197,6 +228,48 @@ const initializeBuildItems = () => {
 const updateBuildItemsVisibility = () => {
     for (const buildItem of buildItems) {
         buildItem.updateVisibility();
+    }
+};
+
+const getBuildItemByCommand = (command) => {
+    const matchingItem = buildItems.find((buildItem) => buildItem.matchesCommand(command));
+    return (typeof matchingItem === "undefined") ? null : matchingItem;
+};
+
+const setHotbarItem = (index, buildItem, shouldToggle = false) => {
+    const lastItem = hotbar[index];
+    if (lastItem !== null) {
+        lastItem.setHotbarText(null);
+    }
+    if (lastItem === buildItem && shouldToggle) {
+        hotbar[index] = null;
+    } else {
+        if (buildItem !== null) {
+            for (let tempIndex = 0; tempIndex < hotbar.length; tempIndex++) {
+                const tempItem = hotbar[tempIndex];
+                if (tempItem === buildItem) {
+                    hotbar[tempIndex] = null;
+                }
+            }
+            buildItem.setHotbarText(index);
+        }
+        hotbar[index] = buildItem;
+    }
+};
+
+const setHotbar = (hotbarText) => {
+    const dataList = JSON.parse(hotbarText);
+    for (let index = 0; index < dataList.length; index++) {
+        const data = dataList[index];
+        const buildItem = (data === null) ? null : getBuildItemByCommand(data);
+        setHotbarItem(index, buildItem);
+    }
+};
+
+const selectHotbarItem = (index) => {
+    const buildItem = hotbar[index];
+    if (buildItem !== null) {
+        buildItem.select();
     }
 };
 
@@ -304,7 +377,7 @@ const repeatBuildItem = (command) => {
     }
     const lastTile = getTile(true, pos);
     if (lastTile instanceof EmptyTile) {
-        const buildItem = buildItems[command.buildItemIndex];
+        const buildItem = getBuildItemByCommand(command);
         const tile = buildItem.getTile();
         setTile(true, pos, tile);
     }
@@ -400,6 +473,10 @@ class ClientDelegate {
     
     setLocalPlayerInfo(command) {
         localPlayerUsername = command.username;
+        const hotbarText = command.extraFields.hotbar;
+        if (hotbarText !== null) {
+            setHotbar(hotbarText);
+        }
     }
     
     addCommandsBeforeUpdateRequest() {
@@ -448,6 +525,14 @@ class ClientDelegate {
         }
         if (keyCode === 83 || keyCode === 40) {
             actInDirection(new Pos(0, 1));
+        }
+        if (keyCode >= 48 && keyCode <= 57) {
+            const index = keyCode - 48;
+            if (shiftKeyIsHeld) {
+                setHotbarItem(index, selectedBuildItem, true);
+            } else {
+                selectHotbarItem(index);
+            }
         }
         return (keyCode !== 38 && keyCode !== 40);
     }
