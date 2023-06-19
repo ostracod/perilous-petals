@@ -24,13 +24,13 @@ const blockTiles = [];
 const sproutTiles = [];
 const flowerTiles = [];
 
-// Map from username to PlayerTile.
+// Map from player key to PlayerTile.
 let playerTileMap = new Map();
 let localPlayerTile = null;
-let localPlayerUsername;
+let localPlayerKey;
 let localPlayerFlip = false;
-// Map from username to Emote.
-const usernameEmoteMap = new Map();
+// Map from player key to Emote.
+const playerEmoteMap = new Map();
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -142,10 +142,11 @@ class PlayerTile extends EntityTile {
     constructor(data) {
         const pos = createPosFromJson(data.pos);
         super(tileTypeIds.empty, pos);
-        this.username = data.username;
+        this.key = data.key;
+        this.displayName = data.displayName;
         this.level = data.level;
         this.score = data.score;
-        if (this.username === localPlayerUsername) {
+        if (this.key === localPlayerKey) {
             localPlayerTile = this;
             this.flip = localPlayerFlip;
             document.getElementById("level").innerHTML = this.level;
@@ -163,11 +164,11 @@ class PlayerTile extends EntityTile {
         }
         this.updateSprite();
         setTile(true, this.pos, this, false);
-        playerTileMap.set(this.username, this);
+        playerTileMap.set(this.key, this);
     }
     
     updateSprite() {
-        const emote = usernameEmoteMap.get(this.username);
+        const emote = playerEmoteMap.get(this.key);
         let emotion;
         if (typeof emote === "undefined") {
             emotion = playerEmotions.neutral;
@@ -191,7 +192,7 @@ class PlayerTile extends EntityTile {
         context.textBaseline = "bottom";
         context.fillStyle = "#000000";
         context.fillText(
-            `${this.username} L${this.level}`,
+            `${this.displayName} L${this.level}`,
             Math.round((this.pos.x + 1 / 2) * scaledSpriteSize),
             Math.round((this.pos.y - 1 / 4) * scaledSpriteSize),
         );
@@ -232,16 +233,16 @@ class TileChange {
 
 class Emote {
     
-    constructor(username, emotion) {
-        this.username = username;
+    constructor(key, emotion) {
+        this.key = key;
         this.emotion = emotion;
         this.age = 0;
-        usernameEmoteMap.set(this.username, this);
+        playerEmoteMap.set(this.key, this);
         this.redrawPlayer();
     }
     
     redrawPlayer() {
-        const playerTile = playerTileMap.get(this.username);
+        const playerTile = playerTileMap.get(this.key);
         if (typeof playerTile !== "undefined") {
             playerTile.redraw();
         }
@@ -250,7 +251,7 @@ class Emote {
     timerEvent() {
         this.age += 1;
         if (this.age > 15) {
-            usernameEmoteMap.delete(this.username);
+            playerEmoteMap.delete(this.key);
             this.redrawPlayer();
         }
     }

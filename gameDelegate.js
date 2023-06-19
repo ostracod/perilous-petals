@@ -2,10 +2,15 @@
 import { gameUtils } from "ostracod-multiplayer";
 import * as commonUtils from "./commonUtils.js";
 import { Pos, readClientOffset } from "./pos.js";
-import { blockTiles, playerTileMap, PlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent } from "./tile.js";
+import { blockTiles, playerTileMap, HumanPlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent, getHumanPlayerKey } from "./tile.js";
+
+const getHumanPlayerTile = (player) => {
+    const key = getHumanPlayerKey(player.username);
+    return playerTileMap.get(key);
+};
 
 const readOffsetCommand = (command, player) => {
-    const playerTile = playerTileMap.get(player.username);
+    const playerTile = getHumanPlayerTile(player);
     const offset = readClientOffset(command.offset);
     if (typeof playerTile === "undefined" || offset === null) {
         return { offset: null, playerTile: null };
@@ -16,7 +21,7 @@ const readOffsetCommand = (command, player) => {
 initWorldTiles();
 
 gameUtils.addCommandListener("getState", true, (command, player, outputCommands) => {
-    const playerTile = playerTileMap.get(player.username);
+    const playerTile = getHumanPlayerTile(player);
     const { flip, lastWorldChangeId: changeId } = command;
     if (typeof playerTile === "undefined" || typeof flip !== "boolean"
             || !commonUtils.isValidInt(changeId, true)) {
@@ -94,12 +99,12 @@ class GameDelegate {
         if (player.extraFields.level === null) {
             player.extraFields.level = 1;
         }
-        const playerTile = new PlayerTile(player);
+        const playerTile = new HumanPlayerTile(player);
         playerTile.addToWorld();
     }
     
     playerLeaveEvent(player) {
-        const playerTile = playerTileMap.get(player.username);
+        const playerTile = getHumanPlayerTile(player);
         playerTile.deleteFromWorld();
     }
     

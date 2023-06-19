@@ -15,7 +15,7 @@ const worldChanges = Array(1000).fill(null);
 let lastWorldChangeId = 0;
 let lastWorldChangeIndex = 0;
 const entityTileSet = new Set();
-// Map from username to PlayerTile.
+// Map from player key to PlayerTile.
 export const playerTileMap = new Map();
 let emptyForegroundTileCount = 0;
 let grassTileCount = 0;
@@ -199,42 +199,29 @@ class EntityTile extends Tile {
     }
 }
 
-export class PlayerTile extends EntityTile {
+class PlayerTile extends EntityTile {
+    // Concrete subclasses of PlayerTile must implement these methods:
+    // getInitPos, getLevel, getScore, increaseScore, decreaseScore, incrementStat
     
-    constructor(player) {
+    constructor(key, displayName) {
         super(tileTypeIds.empty);
-        this.player = player;
+        this.key = key;
+        this.displayName = displayName;
         this.flip = false;
-        this.walkBudget = maxWalkBudget;
-        const statsText = this.player.extraFields.stats;
-        if (statsText === null) {
-            this.stats = {};
-        } else {
-            this.stats = JSON.parse(statsText);
-        }
-        this.clearStatChanges();
     }
     
     addEvent(isForeground, pos) {
         super.addEvent(isForeground, pos);
-        playerTileMap.set(this.player.username, this);
+        playerTileMap.set(this.key, this);
     }
     
     deleteEvent(isForeground) {
         super.deleteEvent(isForeground);
-        playerTileMap.delete(this.player.username);
-    }
-    
-    timerEvent() {
-        super.timerEvent();
-        if (this.walkBudget < maxWalkBudget) {
-            this.walkBudget += 1;
-        }
+        playerTileMap.delete(this.key);
     }
     
     addToWorld() {
-        const { posX, posY } = this.player.extraFields;
-        const pos = new Pos(posX ?? 0, posY ?? 0);
+        const pos = this.getInitPos();
         for (let count = 0; count < 400; count++) {
             const tile = getTile(true, pos);
             if (tile instanceof EmptyTile) {
@@ -250,9 +237,6 @@ export class PlayerTile extends EntityTile {
     }
     
     walk(offset) {
-        if (this.walkBudget < 0) {
-            return;
-        }
         const nextPos = this.pos.copy();
         nextPos.add(offset);
         if (!posIsInWorld(nextPos)) {
@@ -266,16 +250,14 @@ export class PlayerTile extends EntityTile {
             this.removeTile(offset);
         }
         swapForegroundTiles(this.pos, nextPos);
-        this.walkBudget -= 1.5;
     }
     
     emote(emotion) {
-        new EmoteChange(this.player.username, emotion);
+        new EmoteChange(this.key, emotion);
     }
     
     valueIsValidTier(value) {
-        return (commonUtils.isValidInt(value) && value >= 0
-            && value < this.player.extraFields.level);
+        return (commonUtils.isValidInt(value) && value >= 0 && value < this.getLevel());
     }
     
     createSproutTile(isPoisonous, tier) {
@@ -290,10 +272,10 @@ export class PlayerTile extends EntityTile {
                 }
                 mask <<= 1;
             }
-            tier = Math.min(tier, this.player.extraFields.level - 1);
+            tier = Math.min(tier, this.getLevel() - 1);
         }
         return new FlowerTile({
-            creatorUsername: this.player.username,
+            creatorKey: this.key,
             isPoisonous,
             tier,
             age: 0,
@@ -326,6 +308,70 @@ export class PlayerTile extends EntityTile {
             lastTile.playerRemoveEvent(this);
             setTile(true, pos, emptyTile);
         }
+    }
+    
+    persistEvent() {
+        // Do nothing.
+    }
+    
+    toDbJson() {
+        return emptyTile.toDbJson();
+    }
+    
+    toClientJson() {
+        return {
+            key: this.key,
+            displayName: this.displayName,
+            level: this.getLevel(),
+            score: this.getScore(),
+            pos: this.pos.toJson(),
+            flip: this.flip,
+        }
+    }
+}
+
+export class HumanPlayerTile extends PlayerTile {
+    
+    constructor(player) {
+        const { username } = player;
+        super(getHumanPlayerKey(username), username);
+        this.player = player;
+        this.walkBudget = maxWalkBudget;
+        const statsText = this.player.extraFields.stats;
+        if (statsText === null) {
+            this.stats = {};
+        } else {
+            this.stats = JSON.parse(statsText);
+        }
+        this.clearStatChanges();
+    }
+    
+    timerEvent() {
+        super.timerEvent();
+        if (this.walkBudget < maxWalkBudget) {
+            this.walkBudget += 1;
+        }
+    }
+    
+    getInitPos() {
+        const { posX, posY } = this.player.extraFields;
+        return new Pos(posX ?? 0, posY ?? 0);
+    }
+    
+    walk(offset) {
+        if (this.walkBudget < 0) {
+            return;
+        }
+        super.walk(offset);
+        this.walkBudget -= 1.5;
+    }
+    
+    getLevel() {
+        return this.player.extraFields.level;
+    }
+    
+    getScore() {
+        return this.player.score;
     }
     
     increaseScore(amount) {
@@ -363,31 +409,23 @@ export class PlayerTile extends EntityTile {
     }
     
     persistEvent() {
+        super.persistEvent();
         this.player.extraFields.posX = this.pos.x;
         this.player.extraFields.posY = this.pos.y;
         this.player.extraFields.stats = JSON.stringify(this.stats);
     }
+}
+
+class BotPlayerTile extends PlayerTile {
+    // TODO: Implement.
     
-    toDbJson() {
-        return emptyTile.toDbJson();
-    }
-    
-    toClientJson() {
-        return {
-            username: this.player.username,
-            level: this.player.extraFields.level,
-            score: this.player.score,
-            pos: this.pos.toJson(),
-            flip: this.flip,
-        }
-    }
 }
 
 class FlowerTile extends EntityTile {
     
     constructor(data) {
         super(tileTypeIds.sprout);
-        this.creatorUsername = data.creatorUsername;
+        this.creatorKey = data.creatorKey;
         this.isPoisonous = data.isPoisonous;
         this.tier = data.tier;
         this.age = data.age;
@@ -441,13 +479,13 @@ class FlowerTile extends EntityTile {
     }
     
     getCreatorTile() {
-        const playerTile = playerTileMap.get(this.creatorUsername);
+        const playerTile = playerTileMap.get(this.creatorKey);
         return (typeof playerTile === "undefined") ? null : playerTile;
     }
     
     playerRemoveEvent(playerTile) {
         super.playerRemoveEvent(playerTile);
-        const isCreator = (playerTile.player.username === this.creatorUsername);
+        const isCreator = (playerTile.key === this.creatorKey);
         const creatorTile = this.getCreatorTile();
         if (this.isSprout()) {
             playerTile.decreaseScore(sproutRemovalPenalty);
@@ -485,7 +523,7 @@ class FlowerTile extends EntityTile {
     toDbJson() {
         return {
             type: "flower",
-            creatorUsername: this.creatorUsername,
+            creatorKey: this.creatorKey,
             isPoisonous: this.isPoisonous,
             tier: this.tier,
             age: this.age,
@@ -537,9 +575,9 @@ class TileChange extends WorldChange {
 
 class EmoteChange extends WorldChange {
     
-    constructor(username, emotion) {
+    constructor(key, emotion) {
         super();
-        this.username = username;
+        this.key = key;
         this.emotion = emotion;
     }
     
@@ -549,7 +587,7 @@ class EmoteChange extends WorldChange {
     
     getJsonFields() {
         return {
-            username: this.username,
+            key: this.key,
             emotion: this.emotion,
         };
     }
@@ -733,5 +771,7 @@ export const tilesTimerEvent = () => {
     }
     growGrass();
 };
+
+export const getHumanPlayerKey = (username) => "human," + username;
 
 

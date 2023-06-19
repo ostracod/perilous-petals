@@ -348,7 +348,7 @@ const handleWorldChanges = (worldChanges) => {
             const tile = convertTypeIdToTile(change.tileTypeId);
             setTile(change.isForeground, pos, tile, false);
         } else if (change.type = "emote") {
-            new Emote(change.username, change.emotion);
+            new Emote(change.key, change.emotion);
         } else {
             throw new Error(`Unrecognized world change type "${changeType}".`);
         }
@@ -549,7 +549,7 @@ class ClientDelegate {
     }
     
     setLocalPlayerInfo(command) {
-        localPlayerUsername = command.username;
+        localPlayerKey = "human," + command.username;
         const hotbarText = command.extraFields.hotbar;
         if (hotbarText !== null) {
             setHotbar(hotbarText);
@@ -573,7 +573,7 @@ class ClientDelegate {
         if (firstStepDelay <= 0) {
             tryWalk();
         }
-        const emotes = Array.from(usernameEmoteMap.values());
+        const emotes = Array.from(playerEmoteMap.values());
         for (const emote of emotes) {
             emote.timerEvent();
         }
