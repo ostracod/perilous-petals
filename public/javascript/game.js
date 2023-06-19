@@ -93,6 +93,7 @@ class BuildItem {
         }
         selectedBuildItem = this;
         this.updateBorderStyle();
+        this.tag.scrollIntoView({ block: "nearest" });
     }
     
     unselect() {
@@ -272,6 +273,16 @@ const selectHotbarItem = (index) => {
         buildItem.select();
     }
 };
+
+const sendHotbarCommand = () => {
+    const hotbarData = hotbar.map((buildItem) => (
+        (buildItem === null) ? null : buildItem.getBaseCommand()
+    ));
+    gameUpdateCommandList.push({
+        commandName: "setHotbar",
+        hotbar: hotbarData,
+    });
+}
 
 const handleWorldChanges = (worldChanges) => {
     for (let index = tileChanges.length - 1; index >= 0; index--) {
@@ -530,6 +541,7 @@ class ClientDelegate {
             const index = keyCode - 48;
             if (shiftKeyIsHeld) {
                 setHotbarItem(index, selectedBuildItem, true);
+                sendHotbarCommand();
             } else {
                 selectHotbarItem(index);
             }

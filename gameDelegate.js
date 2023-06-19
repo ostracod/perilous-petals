@@ -69,6 +69,10 @@ gameUtils.addCommandListener("removeTile", true, (command, player, outputCommand
     }
 });
 
+gameUtils.addCommandListener("setHotbar", true, (command, player, outputCommands) => {
+    player.extraFields.hotbar = JSON.stringify(command.hotbar);
+});
+
 class GameDelegate {
     
     constructor() {
