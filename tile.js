@@ -137,6 +137,10 @@ class BlockTile extends Tile {
         return true;
     }
     
+    playerBuildEvent(playerTile) {
+        playerTile.incrementStat("blocksPlaced");
+    }
+    
     toDbJson() {
         return { type: "block", tier: this.tier };
     }
@@ -196,6 +200,13 @@ export class PlayerTile extends EntityTile {
         this.player = player;
         this.flip = false;
         this.walkBudget = maxWalkBudget;
+        const statsText = this.player.extraFields.stats;
+        if (statsText === null) {
+            this.stats = {};
+        } else {
+            this.stats = JSON.parse(statsText);
+        }
+        this.changedStats = new Set(Object.keys(this.stats));
     }
     
     addEvent(isForeground, pos) {
@@ -313,7 +324,7 @@ export class PlayerTile extends EntityTile {
     increaseScore(amount) {
         this.player.score += amount;
         const { extraFields } = this.player;
-        while (true) {
+        while (extraFields.level < levelPointAmounts.length) {
             const scoreThreshold = levelPointAmounts[extraFields.level];
             if (typeof scoreThreshold === "undefined"
                     || this.player.score < scoreThreshold) {
@@ -332,9 +343,18 @@ export class PlayerTile extends EntityTile {
         return amount;
     }
     
+    incrementStat(name) {
+        if (!(name in this.stats)) {
+            this.stats[name] = 0;
+        }
+        this.stats[name] += 1;
+        this.changedStats.add(name);
+    }
+    
     persistEvent() {
         this.player.extraFields.posX = this.pos.x;
         this.player.extraFields.posY = this.pos.y;
+        this.player.extraFields.stats = JSON.stringify(this.stats);
     }
     
     toDbJson() {
@@ -345,6 +365,7 @@ export class PlayerTile extends EntityTile {
         return {
             username: this.player.username,
             level: this.player.extraFields.level,
+            score: this.player.score,
             pos: this.pos.toJson(),
             flip: this.flip,
         }

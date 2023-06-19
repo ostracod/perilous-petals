@@ -31,6 +31,8 @@ const flowerNames = [
 const buildItems = [];
 let selectedBuildItem = null;
 const hotbar = Array(10).fill(null);
+// Map from name to PlayerStat.
+const statMap = new Map();
 
 const walkOffset = new Pos(0, 0);
 let walkDelay = 0;
@@ -211,6 +213,38 @@ class BlockBuildItem extends BuildItem {
     }
 }
 
+class PlayerStat {
+    
+    constructor(name, displayName) {
+        this.name = name;
+        this.displayName = displayName;
+        this.count = 0;
+        this.tag = document.createElement("p");
+        this.tag.style.display = "none";
+        const nameTag = document.createElement("span");
+        nameTag.innerHTML = displayName + ": ";
+        this.tag.appendChild(nameTag);
+        this.countTag = document.createElement("span");
+        this.tag.appendChild(this.countTag);
+        document.getElementById("statsContainer").appendChild(this.tag);
+        statMap.set(this.name, this);
+    }
+    
+    setCount(count) {
+        this.count = count;
+        this.countTag.innerHTML = this.count;
+        this.tag.style.display = "";
+    }
+}
+
+const pluralize = (count, noun) => {
+    let output = count + " " + noun;
+    if (count !== 1) {
+        output += "s";
+    }
+    return output;
+}
+
 const initializeBuildItems = () => {
     new SproutBuildItem(false);
     new SproutBuildItem(true);
@@ -224,6 +258,10 @@ const initializeBuildItems = () => {
         buildItem.createTag();
     }
     buildItems[0].select();
+};
+
+const initializeStats = () => {
+    new PlayerStat("blocksPlaced", "Blocks placed");
 };
 
 const updateBuildItemsVisibility = () => {
@@ -394,6 +432,13 @@ const repeatBuildItem = (command) => {
     }
 };
 
+const handleStatChange = (name, count) => {
+    const stat = statMap.get(name);
+    if (typeof stat !== "undefined") {
+        stat.setCount(count);
+    }
+};
+
 addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
@@ -405,7 +450,7 @@ addCommandListener("setState", (command) => {
         hasLoadedTiles = true;
         tileChanges = [];
     }
-    const { worldChanges } = command;
+    const { worldChanges, stats } = command;
     if (typeof worldChanges !== "undefined") {
         handleWorldChanges(worldChanges);
     }
@@ -418,6 +463,11 @@ addCommandListener("setState", (command) => {
     }
     if (getLocalPlayerLevel() !== lastLevel) {
         updateBuildItemsVisibility();
+    }
+    if (typeof stats !== "undefined") {
+        for (const name in stats) {
+            handleStatChange(name, stats[name]);
+        }
     }
 });
 
@@ -456,6 +506,7 @@ class ConstantsRequest extends AjaxRequest {
         sproutStageAmount = data.sproutStageAmount;
         tileTypeIds = data.tileTypeIds;
         startTileChar = data.startTileChar;
+        levelPointAmounts = data.levelPointAmounts;
         playerEmotions = data.playerEmotions;
         worldPixelSize = worldSize * spriteSize;
         worldTilesLength = worldSize ** 2;
@@ -477,6 +528,7 @@ class ClientDelegate {
                 initializeBufferCanvas();
                 initializeTiles();
                 initializeBuildItems();
+                initializeStats();
                 done();
             });
         });

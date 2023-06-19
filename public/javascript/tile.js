@@ -7,6 +7,7 @@ let grassTextureAmount;
 let sproutStageAmount;
 let tileTypeIds;
 let startTileChar;
+let levelPointAmounts;
 let playerEmotions;
 
 let foregroundTiles;
@@ -143,9 +144,20 @@ class PlayerTile extends EntityTile {
         super(tileTypeIds.empty, pos);
         this.username = data.username;
         this.level = data.level;
+        this.score = data.score;
         if (this.username === localPlayerUsername) {
             localPlayerTile = this;
             this.flip = localPlayerFlip;
+            document.getElementById("level").innerHTML = this.level;
+            document.getElementById("score").innerHTML = pluralize(this.score, "point");
+            let nextLevelText;
+            if (this.level >= levelPointAmounts) {
+                nextLevelText = "(None)";
+            } else {
+                const pointAmount = levelPointAmounts[this.level];
+                nextLevelText = pluralize(pointAmount, "point");
+            }
+            document.getElementById("nextLevelScore").innerHTML = nextLevelText;
         } else {
             this.flip = data.flip;
         }

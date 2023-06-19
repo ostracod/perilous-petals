@@ -35,6 +35,14 @@ gameUtils.addCommandListener("getState", true, (command, player, outputCommands)
     } else {
         outputCommand.worldChanges = changesToSend.map((change) => change.toJson());
     }
+    if (playerTile.changedStats.size > 0) {
+        const stats = {};
+        for (const name of playerTile.changedStats) {
+            stats[name] = playerTile.stats[name];
+        }
+        playerTile.changedStats = new Set();
+        outputCommand.stats = stats;
+    }
     outputCommands.push(outputCommand);
 });
 
