@@ -8,6 +8,9 @@ dependencies:
   express:
     specifier: ^4.17.1
     version: 4.18.2
+  heap:
+    specifier: ^0.2.7
+    version: 0.2.7
   ostracod-multiplayer:
     specifier: github:ostracod/ostracod-multiplayer#semver:^1.5.0
     version: github.com/ostracod/ostracod-multiplayer/6fdc9015e2dff0aabbf4a29efe19f3b0e01376c5
@@ -468,6 +471,10 @@ packages:
     engines: {node: '>= 0.4.0'}
     dependencies:
       function-bind: 1.1.1
+    dev: false
+
+  /heap@0.2.7:
+    resolution: {integrity: sha512-2bsegYkkHO+h/9MGbn6KWcE45cHZgPANo5LXF7EvWdT0yT2EguSVO1nDgU5c8+ZOPwp2vMNa7YFsJhVcDR9Sdg==}
     dev: false
 
   /http-errors@2.0.0:

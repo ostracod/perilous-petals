@@ -6,6 +6,7 @@ export const projectPath = pathUtils.dirname(fileURLToPath(import.meta.url));
 export const worldTilesPath = pathUtils.join(projectPath, "worldTiles.json");
 
 export const worldSize = 26;
+export const worldTilesLength = worldSize ** 2;
 export const tierAmount = 24;
 export const grassTextureAmount = 3;
 export const sproutStageAmount = 3;

@@ -3,6 +3,7 @@ import { gameUtils } from "ostracod-multiplayer";
 import * as commonUtils from "./commonUtils.js";
 import { Pos, readClientOffset } from "./pos.js";
 import { blockTiles, playerTileMap, HumanPlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent, getHumanPlayerKey } from "./tile.js";
+import { BotPlayerTile } from "./botPlayer.js";
 
 const getHumanPlayerTile = (player) => {
     const key = getHumanPlayerKey(player.username);
@@ -19,6 +20,8 @@ const readOffsetCommand = (command, player) => {
 };
 
 initWorldTiles();
+const botPlayerTile = new BotPlayerTile("bot");
+botPlayerTile.addToWorld();
 
 gameUtils.addCommandListener("getState", true, (command, player, outputCommands) => {
     const playerTile = getHumanPlayerTile(player);

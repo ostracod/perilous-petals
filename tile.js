@@ -1,11 +1,10 @@
 
 import * as fs from "fs";
 import * as crypto from "crypto";
-import { worldTilesPath, worldSize, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty, playerEmotions } from "./constants.js";
+import { worldTilesPath, worldSize, worldTilesLength, tierAmount, grassTextureAmount, sproutStageAmount, tileTypeIds, startTileChar, levelPointAmounts, flowerPointAmounts, sproutBuildCost, sproutRemovalPenalty, poisonFlowerPenalty, playerEmotions } from "./constants.js";
 import * as commonUtils from "./commonUtils.js";
 import { Pos } from "./pos.js";
 
-const worldTilesLength = worldSize ** 2;
 const maxWalkBudget = 30;
 
 const foregroundTiles = Array(worldTilesLength).fill(null);
@@ -19,7 +18,6 @@ const entityTileSet = new Set();
 export const playerTileMap = new Map();
 let emptyForegroundTileCount = 0;
 let grassTileCount = 0;
-let nextBotId = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -123,7 +121,7 @@ while (grassTiles.length < grassTextureAmount) {
     grassTiles.push(tile);
 }
 
-class BlockTile extends Tile {
+export class BlockTile extends Tile {
     
     constructor(tier) {
         super(tileTypeIds.block + tier);
@@ -200,7 +198,7 @@ class EntityTile extends Tile {
     }
 }
 
-class PlayerTile extends EntityTile {
+export class PlayerTile extends EntityTile {
     // Concrete subclasses of PlayerTile must implement these methods:
     // getInitPos, getLevel, getScore, increaseScore, decreaseScore, incrementStat
     
@@ -418,74 +416,6 @@ export class HumanPlayerTile extends PlayerTile {
     }
 }
 
-class BotPlayerTile extends PlayerTile {
-    
-    constructor(displayName) {
-        const id = nextBotId;
-        nextBotId += 1;
-        super("bot," + id, displayName);
-        this.actDelay = 0;
-        this.direction = 1;
-    }
-    
-    timerEvent() {
-        this.actDelay += 1;
-        if (this.actDelay > 3) {
-            const offset = new Pos(this.direction, 0);
-            const hasWalked = this.walk(offset);
-            if (!hasWalked) {
-                this.direction *= -1;
-            }
-            this.actDelay = 0;
-        }
-    }
-    
-    setFlip(offset) {
-        if (offset.x !== 0) {
-            this.flip = (offset.x < 0);
-        }
-    }
-    
-    getInitPos() {
-        return new Pos(3, 3);
-    }
-    
-    getLevel() {
-        return 7;
-    }
-    
-    getScore() {
-        return 0;
-    }
-    
-    increaseScore(amount) {
-        // Do nothing.
-    }
-    
-    decreaseScore(amount) {
-        return amount;
-    }
-    
-    incrementStat(name) {
-        // Do nothing.
-    }
-    
-    walk(offset) {
-        this.setFlip(offset);
-        return super.walk(offset);
-    }
-    
-    buildTile(offset, getBuildTile) {
-        this.setFlip(offset);
-        super.buildTile(offset, getBuildTile);
-    }
-    
-    removeTile(offset) {
-        this.setFlip(offset);
-        super.removeTile(offset);
-    }
-}
-
 class FlowerTile extends EntityTile {
     
     constructor(data) {
@@ -673,15 +603,15 @@ const convertJsonToTile = (data) => {
     throw new Error(`Unrecognized tile type "${type}".`);
 };
 
-const posIsInWorld = (pos) => (
+export const posIsInWorld = (pos) => (
     pos.x >= 0 && pos.x < worldSize && pos.y >= 0 && pos.y < worldSize
 );
 
-const getTileIndex = (pos) => pos.x + pos.y * worldSize;
+export const getTileIndex = (pos) => pos.x + pos.y * worldSize;
 
 const getTiles = (isForeground) => isForeground ? foregroundTiles : backgroundTiles;
 
-const getTile = (isForeground, pos) => {
+export const getTile = (isForeground, pos) => {
     const index = getTileIndex(pos);
     return getTiles(isForeground)[index];
 };
@@ -761,8 +691,6 @@ export const initWorldTiles = () => {
     } else {
         createWorldTiles();
     }
-    const botPlayerTile = new BotPlayerTile("bot");
-    botPlayerTile.addToWorld();
 };
 
 export const writeWorldTiles = () => {
