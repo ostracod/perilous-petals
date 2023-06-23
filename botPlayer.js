@@ -2,7 +2,7 @@
 import Heap from "heap";
 import { worldTilesLength } from "./constants.js";
 import { Pos } from "./pos.js";
-import { posIsInWorld, getTileIndex, getTile, BlockTile, PlayerTile } from "./tile.js";
+import { entityTileSet, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile } from "./tile.js";
 
 const nodeNeighborOffsets = [
     new Pos(-1, 0), new Pos(1, 0),
@@ -24,6 +24,60 @@ class TileNode {
         const index = getTileIndex(this.pos);
         nodeGrid[index] = this;
     }
+    
+    createWalkPath() {
+        const posList = [];
+        let node = this;
+        while (node !== null) {
+            posList.push(node.pos);
+            node = node.previousNode;
+        }
+        posList.reverse();
+        return new WalkPath(posList);
+    }
+}
+
+class PathStep {
+    
+    constructor(pos) {
+        this.pos = pos;
+        const tile = getTile(true, this.pos);
+        this.wasEmpty = (tile instanceof EmptyTile);
+    }
+}
+
+class WalkPath {
+    
+    constructor(posList) {
+        this.steps = posList.map((pos) => new PathStep(pos));
+        this.index = 0;
+    }
+    
+    isFinished(pos) {
+        const lastStep = this.steps.at(-1);
+        return pos.equals(lastStep.pos);
+    }
+    
+    getWalkOffset(pos) {
+        let step = this.steps[this.index];
+        if (this.index < this.steps.length - 1 && pos.equals(step.pos)) {
+            this.index += 1;
+            step = this.steps[this.index]
+        }
+        if (pos.x > step.pos.x) {
+            return new Pos(-1, 0);
+        }
+        if (pos.x < step.pos.x) {
+            return new Pos(1, 0);
+        }
+        if (pos.y > step.pos.y) {
+            return new Pos(0, -1);
+        }
+        if (pos.y < step.pos.y) {
+            return new Pos(0, 1);
+        }
+        return null;
+    }
 }
 
 export class BotPlayerTile extends PlayerTile {
@@ -33,20 +87,35 @@ export class BotPlayerTile extends PlayerTile {
         nextBotId += 1;
         super("bot," + id, displayName);
         this.actDelay = 0;
-        this.direction = 1;
+        this.walkPath = null;
     }
     
     timerEvent() {
         this.actDelay += 1;
         if (this.actDelay > 3) {
-            const results = this.scanTiles((tile) => (
-                (tile instanceof BlockTile) ? null : 1
-            ));
-            console.log(results.visitedNodes.length);
-            const offset = new Pos(this.direction, 0);
-            const hasWalked = this.walk(offset);
-            if (!hasWalked) {
-                this.direction *= -1;
+            if (this.walkPath !== null && this.walkPath.isFinished(this.pos)) {
+                this.walkPath = null;
+            }
+            if (this.walkPath === null) {
+                const { nodeGrid, visitedNodes } = this.scanTiles((tile) => (
+                    (tile instanceof BlockTile) ? null : 1
+                ));
+                for (const entity of entityTileSet) {
+                    if (!(entity instanceof FlowerTile) || entity.isSprout()) {
+                        continue;
+                    }
+                    const node = getGridNode(nodeGrid, entity.pos);
+                    if (node === null) {
+                        continue;
+                    }
+                    this.walkPath = node.createWalkPath();
+                }
+            }
+            if (this.walkPath !== null) {
+                const offset = this.walkPath.getWalkOffset(this.pos);
+                if (offset !== null) {
+                    this.walk(offset);
+                }
             }
             this.actDelay = 0;
         }

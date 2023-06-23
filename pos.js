@@ -12,6 +12,10 @@ export class Pos {
         return new Pos(this.x, this.y);
     }
     
+    equals(pos) {
+        return (this.x === pos.x && this.y === pos.y);
+    }
+    
     set(pos) {
         this.x = pos.x;
         this.y = pos.y;

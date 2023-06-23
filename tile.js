@@ -13,7 +13,7 @@ const backgroundTiles = Array(worldTilesLength).fill(null);
 const worldChanges = Array(1000).fill(null);
 let lastWorldChangeId = 0;
 let lastWorldChangeIndex = 0;
-const entityTileSet = new Set();
+export const entityTileSet = new Set();
 // Map from player key to PlayerTile.
 export const playerTileMap = new Map();
 let emptyForegroundTileCount = 0;
@@ -62,7 +62,7 @@ class Tile {
     }
 }
 
-class EmptyTile extends Tile {
+export class EmptyTile extends Tile {
     
     constructor() {
         super(tileTypeIds.empty);
@@ -416,7 +416,7 @@ export class HumanPlayerTile extends PlayerTile {
     }
 }
 
-class FlowerTile extends EntityTile {
+export class FlowerTile extends EntityTile {
     
     constructor(data) {
         super(tileTypeIds.sprout);
