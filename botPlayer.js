@@ -32,6 +32,9 @@ class TileNode {
             posList.push(node.pos);
             node = node.previousNode;
         }
+        if (posList.length <= 1) {
+            return null;
+        }
         posList.reverse();
         return new WalkPath(posList);
     }
@@ -41,8 +44,12 @@ class PathStep {
     
     constructor(pos) {
         this.pos = pos;
+        this.tile = getTile(true, this.pos);
+    }
+    
+    tileHasChanged() {
         const tile = getTile(true, this.pos);
-        this.wasEmpty = (tile instanceof EmptyTile);
+        return (this.tile !== tile);
     }
 }
 
@@ -50,21 +57,37 @@ class WalkPath {
     
     constructor(posList) {
         this.steps = posList.map((pos) => new PathStep(pos));
-        this.index = 0;
+        this.index = 1;
     }
     
-    isFinished(pos) {
-        const lastStep = this.steps.at(-1);
-        return pos.equals(lastStep.pos);
+    getCurrentStep() {
+        return this.steps[this.index];
+    }
+    
+    advance(pos) {
+        const step = this.getCurrentStep();
+        if (pos.equals(step.pos)) {
+            if (this.index >= this.steps.length - 1) {
+                return true;
+            }
+            this.index += 1;
+        }
+        return false;
     }
     
     getWalkOffset(pos) {
-        let step = this.steps[this.index];
-        if (this.index < this.steps.length - 1 && pos.equals(step.pos)) {
-            this.index += 1;
-            step = this.steps[this.index]
-        }
+        const step = this.getCurrentStep();
         return getOffsetToPos(pos, step.pos);
+    }
+    
+    tileHasChanged() {
+        for (let index = this.index; index < this.steps.length; index++) {
+            const step = this.steps[index];
+            if (step.tileHasChanged()) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
@@ -200,54 +223,69 @@ export class BotPlayerTile extends PlayerTile {
         return { nodeGrid, visitedNodes };
     }
     
-    act() {
-        if (this.walkPath !== null && this.walkPath.isFinished(this.pos)) {
-            if (this.targetAction !== null) {
-                this.targetAction.perform(this);
-                this.targetAction = null;
-            }
-            this.walkPath = null;
+    planIsValid() {
+        if (this.walkPath !== null) {
+            return !this.walkPath.tileHasChanged();
         }
-        if (this.walkPath === null) {
-            const { nodeGrid, visitedNodes } = this.scanTiles((tile) => {
-                if (tile instanceof BlockTile) {
-                    return null;
-                }
-                if (tile instanceof FlowerTile) {
-                    return 30;
-                }
-                return 1;
-            });
-            for (const entity of entityTileSet) {
-                if (!(entity instanceof FlowerTile) || entity.isSprout()) {
-                    continue;
-                }
-                const node = getGridNode(nodeGrid, entity.pos);
-                if (node === null) {
-                    continue;
-                }
-                this.walkPath = node.createWalkPath();
-                break;
+        return (this.targetAction !== null);
+    }
+    
+    makePlan() {
+        this.walkPath = null;
+        this.targetAction = null;
+        const { nodeGrid, visitedNodes } = this.scanTiles((tile) => {
+            if (tile instanceof BlockTile) {
+                return null;
             }
-            if (this.walkPath === null) {
-                for (const node of visitedNodes) {
-                    if (canPlantSeed(node.pos)) {
-                        const neighborNode = getClosestNeighborNode(nodeGrid, node.pos);
-                        if (neighborNode !== null) {
-                            this.walkPath = neighborNode.createWalkPath();
-                            this.targetAction = new PlantSeedAction(node.pos);
-                            break;
-                        }
-                    }
+            if (tile instanceof FlowerTile) {
+                return 30;
+            }
+            return 1;
+        });
+        for (const entity of entityTileSet) {
+            if (!(entity instanceof FlowerTile) || entity.isSprout()) {
+                continue;
+            }
+            const node = getGridNode(nodeGrid, entity.pos);
+            if (node === null) {
+                continue;
+            }
+            this.walkPath = node.createWalkPath();
+            return;
+        }
+        for (const node of visitedNodes) {
+            if (canPlantSeed(node.pos)) {
+                const neighborNode = getClosestNeighborNode(nodeGrid, node.pos);
+                if (neighborNode !== null) {
+                    this.walkPath = neighborNode.createWalkPath();
+                    this.targetAction = new PlantSeedAction(node.pos);
+                    break;
                 }
             }
         }
+    }
+    
+    executePlan() {
         if (this.walkPath !== null) {
             const offset = this.walkPath.getWalkOffset(this.pos);
             if (offset !== null) {
                 this.walk(offset);
+                const hasFinished = this.walkPath.advance(this.pos);
+                if (hasFinished) {
+                    this.walkPath = null;
+                }
             }
+        } else if (this.targetAction !== null) {
+            this.targetAction.perform(this);
+            this.targetAction = null;
         }
+    }
+    
+    act() {
+        if (!this.planIsValid()) {
+            this.makePlan();
+        }
+        this.executePlan();
     }
 }
 
