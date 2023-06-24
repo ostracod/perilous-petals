@@ -359,7 +359,7 @@ export class HumanPlayerTile extends PlayerTile {
     
     getInitPos() {
         const { posX, posY } = this.player.extraFields;
-        return new Pos(posX ?? 0, posY ?? 0);
+        return new Pos(posX ?? 3, posY ?? 3);
     }
     
     walk(offset) {
