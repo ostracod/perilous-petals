@@ -31,7 +31,7 @@ class TileNode {
         nodeGrid[index] = this;
     }
     
-    createWalkPath() {
+    createWalkPath(isDestructive) {
         const posList = [];
         let node = this;
         while (node !== null) {
@@ -42,7 +42,7 @@ class TileNode {
             return null;
         }
         posList.reverse();
-        return new WalkPath(posList);
+        return new WalkPath(posList, isDestructive);
     }
 }
 
@@ -61,8 +61,9 @@ class PathStep {
 
 class WalkPath {
     
-    constructor(posList) {
+    constructor(posList, isDestructive) {
         this.steps = posList.map((pos) => new PathStep(pos));
+        this.isDestructive = isDestructive;
         this.index = 1;
     }
     
@@ -185,7 +186,7 @@ export class BotPlayerTile extends PlayerTile {
         super.removeTile(offset);
     }
     
-    scanTiles(getTileCost) {
+    scanTiles(isDestructive) {
         const firstNode = new TileNode(this.pos.copy(), null, 0);
         const nodeGrid = Array(worldTilesLength).fill(null);
         firstNode.addToGrid(nodeGrid);
@@ -210,7 +211,7 @@ export class BotPlayerTile extends PlayerTile {
                     continue;
                 }
                 const tile = getTile(true, neighborPos);
-                const tileCost = getTileCost(tile);
+                const tileCost = getTileCost(tile, isDestructive);
                 if (tileCost === null) {
                     continue;
                 }
@@ -228,6 +229,54 @@ export class BotPlayerTile extends PlayerTile {
             }
         }
         return { nodeGrid, visitedNodes };
+    }
+    
+    // unreachablePosList is a list of flower positions which
+    // can only be reached by destroying blocks.
+    makeDestructiveFlowerPath(unreachablePosList) {
+        const { nodeGrid } = this.scanTiles(true);
+        let closestNode = null;
+        for (const pos of unreachablePosList) {
+            const node = getGridNode(nodeGrid, pos);
+            if (node === null || node.pathCost === null) {
+                continue;
+            }
+            if (closestNode === null || node.pathCost < closestNode.pathCost) {
+                closestNode = node;
+            }
+        }
+        if (closestNode === null) {
+            return false
+        }
+        this.walkPath = closestNode.createWalkPath(true);
+        return true;
+    }
+    
+    planSeedAction(nodeGrid, visitedNodes, isDestructive) {
+        const seedPosList = [];
+        for (const node of visitedNodes) {
+            if (canPlantSeed(node.pos)) {
+                seedPosList.push(node.pos);
+                if (seedPosList.length > 15) {
+                    break;
+                }
+            }
+        }
+        if (seedPosList.length <= 0) {
+            return false;
+        }
+        const result = selectSeedNeighbor(nodeGrid, seedPosList);
+        if (result === null) {
+            return false;
+        }
+        this.walkPath = result.neighborNode.createWalkPath(isDestructive);
+        this.targetAction = new PlantSeedAction(result.pos);
+        return true;
+    }
+    
+    makeDestructiveSeedPath() {
+        const { nodeGrid, visitedNodes } = this.scanTiles(true);
+        return this.planSeedAction(nodeGrid, visitedNodes, true);
     }
     
     plantSeedNextToPath() {
@@ -261,17 +310,10 @@ export class BotPlayerTile extends PlayerTile {
         this.planAge = 0;
         
         // Find the shortest path to all reachable tiles.
-        const { nodeGrid, visitedNodes } = this.scanTiles((tile) => {
-            if (tile instanceof BlockTile) {
-                return null;
-            }
-            if (tile instanceof FlowerTile) {
-                return 30;
-            }
-            return 1;
-        });
+        const { nodeGrid, visitedNodes } = this.scanTiles(false);
         
         // Find the closest reachable flower.
+        const unreachablePosList = [];
         let closestNode = null;
         for (const entity of entityTileSet) {
             if (!(entity instanceof FlowerTile) || entity.isSprout()) {
@@ -279,34 +321,29 @@ export class BotPlayerTile extends PlayerTile {
             }
             const node = getGridNode(nodeGrid, entity.pos);
             if (node === null || node.pathCost === null) {
+                unreachablePosList.push(entity.pos);
                 continue;
             }
             if (closestNode === null || node.pathCost < closestNode.pathCost) {
                 closestNode = node;
             }
         }
+        // If we find unreachable flowers, destroy blocks to reach them.
+        if (unreachablePosList.length > 0) {
+            const hasMadePath = this.makeDestructiveFlowerPath(unreachablePosList);
+            if (hasMadePath) {
+                return;
+            }
+        }
         if (closestNode !== null) {
-            this.walkPath = closestNode.createWalkPath();
+            this.walkPath = closestNode.createWalkPath(false);
             return;
         }
         
         // Find a good place to plant a seed.
-        const seedPosList = [];
-        for (const node of visitedNodes) {
-            if (canPlantSeed(node.pos)) {
-                seedPosList.push(node.pos);
-                if (seedPosList.length > 15) {
-                    break;
-                }
-            }
-        }
-        if (seedPosList.length > 0) {
-            const pos = seedPosList[Math.floor(Math.random() * seedPosList.length)];
-            const neighborNode = getClosestNeighborNode(nodeGrid, pos);
-            if (neighborNode !== null) {
-                this.walkPath = neighborNode.createWalkPath();
-                this.targetAction = new PlantSeedAction(pos);
-            }
+        const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, false);
+        if (!hasPlanned) {
+            this.makeDestructiveSeedPath();
         }
     }
     
@@ -321,6 +358,15 @@ export class BotPlayerTile extends PlayerTile {
             }
             const offset = this.walkPath.getWalkOffset(this.pos);
             if (offset !== null) {
+                if (this.walkPath.isDestructive) {
+                    const pos = this.pos.copy();
+                    pos.add(offset);
+                    const tile = getTile(true, pos);
+                    if (tile instanceof BlockTile) {
+                        this.removeTile(offset);
+                        return;
+                    }
+                }
                 this.walk(offset);
                 const hasFinished = this.walkPath.advance(this.pos);
                 if (hasFinished) {
@@ -366,12 +412,25 @@ const getClosestNeighborNode = (nodeGrid, inputPos) => {
     return closestNode;
 };
 
+const getTileCost = (tile, isDestructive) => {
+    if (tile instanceof BlockTile) {
+        return isDestructive ? 4 : null;
+    }
+    if (tile instanceof FlowerTile || tile instanceof PlayerTile) {
+        return 30;
+    }
+    return 1;
+};
+
 const canReachOffset = (inputPos, emptyIndex1, emptyIndex2) => {
     const pos = new Pos(0, 0);
     for (let index = emptyIndex1 + 1; index % 8 !== emptyIndex2; index++) {
         const offset = clockwiseOffsets[index % 8];
         pos.set(inputPos);
         pos.add(offset);
+        if (!posIsInWorld(pos)) {
+            return false;
+        }
         const tile = getTile(true, pos);
         if (tile instanceof BlockTile) {
             return false;
@@ -404,6 +463,9 @@ const canPlantSeed = (inputPos) => {
         const offset = clockwiseOffsets[index];
         pos.set(inputPos);
         pos.add(offset);
+        if (!posIsInWorld(pos)) {
+            continue;
+        }
         const tile = getTile(true, pos);
         if (!(tile instanceof BlockTile)) {
             emptyIndexes.push(index);
@@ -420,6 +482,27 @@ const canPlantSeed = (inputPos) => {
         }
     }
     return true;
+};
+
+const selectSeedNeighborHelper = (nodeGrid, seedPosList, index) => {
+    const pos = seedPosList[index];
+    const neighborNode = getClosestNeighborNode(nodeGrid, pos);
+    return (neighborNode === null) ? null : { pos, neighborNode };
+};
+
+const selectSeedNeighbor = (nodeGrid, seedPosList) => {
+    const index = Math.floor(Math.random() * seedPosList.length);
+    const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+    if (result !== null) {
+        return result;
+    }
+    for (let index = 0; index < seedPosList.length; index++) {
+        const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+        if (result !== null) {
+            return result;
+        }
+    }
+    return null;
 };
 
 const getOffsetToPos = (srcPos, destPos) => {
