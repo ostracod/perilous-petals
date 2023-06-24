@@ -77,7 +77,7 @@ gameUtils.addCommandListener("placeSprout", true, (command, player, outputComman
     const { isPoisonous, tier } = command;
     if (offset !== null && typeof isPoisonous === "boolean"
             && (tier === null || (playerTile.valueIsValidTier(tier) && isPoisonous))) {
-        playerTile.buildTile(offset, () => playerTile.createSproutTile(isPoisonous, tier));
+        playerTile.buildSproutTile(offset, isPoisonous, tier);
     }
 });
 

@@ -4,7 +4,7 @@ import { worldTilesLength } from "./constants.js";
 import { Pos } from "./pos.js";
 import { entityTileSet, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile } from "./tile.js";
 
-const nodeNeighborOffsets = [
+const neighborOffsets = [
     new Pos(-1, 0), new Pos(1, 0),
     new Pos(0, -1), new Pos(0, 1),
 ];
@@ -64,19 +64,30 @@ class WalkPath {
             this.index += 1;
             step = this.steps[this.index]
         }
-        if (pos.x > step.pos.x) {
-            return new Pos(-1, 0);
+        return getOffsetToPos(pos, step.pos);
+    }
+}
+
+class TargetAction {
+    // Concrete subclasses of TargetAction must implement these methods:
+    // perform
+    
+}
+
+class PlantSeedAction {
+    
+    constructor(pos) {
+        this.pos = pos;
+    }
+    
+    perform(bot) {
+        if (!canPlantSeed(this.pos)) {
+            return;
         }
-        if (pos.x < step.pos.x) {
-            return new Pos(1, 0);
+        const offset = getOffsetToPos(bot.pos, this.pos);
+        if (offset !== null) {
+            bot.buildSproutTile(offset, false, null);
         }
-        if (pos.y > step.pos.y) {
-            return new Pos(0, -1);
-        }
-        if (pos.y < step.pos.y) {
-            return new Pos(0, 1);
-        }
-        return null;
     }
 }
 
@@ -88,35 +99,13 @@ export class BotPlayerTile extends PlayerTile {
         super("bot," + id, displayName);
         this.actDelay = 0;
         this.walkPath = null;
+        this.targetAction = null;
     }
     
     timerEvent() {
         this.actDelay += 1;
         if (this.actDelay > 3) {
-            if (this.walkPath !== null && this.walkPath.isFinished(this.pos)) {
-                this.walkPath = null;
-            }
-            if (this.walkPath === null) {
-                const { nodeGrid, visitedNodes } = this.scanTiles((tile) => (
-                    (tile instanceof BlockTile) ? null : 1
-                ));
-                for (const entity of entityTileSet) {
-                    if (!(entity instanceof FlowerTile) || entity.isSprout()) {
-                        continue;
-                    }
-                    const node = getGridNode(nodeGrid, entity.pos);
-                    if (node === null) {
-                        continue;
-                    }
-                    this.walkPath = node.createWalkPath();
-                }
-            }
-            if (this.walkPath !== null) {
-                const offset = this.walkPath.getWalkOffset(this.pos);
-                if (offset !== null) {
-                    this.walk(offset);
-                }
-            }
+            this.act();
             this.actDelay = 0;
         }
     }
@@ -177,7 +166,7 @@ export class BotPlayerTile extends PlayerTile {
             const node = nodesToVisit.pop();
             node.visited = true;
             visitedNodes.push(node);
-            for (const offset of nodeNeighborOffsets) {
+            for (const offset of neighborOffsets) {
                 const neighborPos = node.pos.copy();
                 neighborPos.add(offset);
                 if (!posIsInWorld(neighborPos)) {
@@ -210,11 +199,114 @@ export class BotPlayerTile extends PlayerTile {
         }
         return { nodeGrid, visitedNodes };
     }
+    
+    act() {
+        if (this.walkPath !== null && this.walkPath.isFinished(this.pos)) {
+            if (this.targetAction !== null) {
+                this.targetAction.perform(this);
+                this.targetAction = null;
+            }
+            this.walkPath = null;
+        }
+        if (this.walkPath === null) {
+            const { nodeGrid, visitedNodes } = this.scanTiles((tile) => {
+                if (tile instanceof BlockTile) {
+                    return null;
+                }
+                if (tile instanceof FlowerTile) {
+                    return 30;
+                }
+                return 1;
+            });
+            for (const entity of entityTileSet) {
+                if (!(entity instanceof FlowerTile) || entity.isSprout()) {
+                    continue;
+                }
+                const node = getGridNode(nodeGrid, entity.pos);
+                if (node === null) {
+                    continue;
+                }
+                this.walkPath = node.createWalkPath();
+                break;
+            }
+            if (this.walkPath === null) {
+                for (const node of visitedNodes) {
+                    if (canPlantSeed(node.pos)) {
+                        const neighborNode = getClosestNeighborNode(nodeGrid, node.pos);
+                        if (neighborNode !== null) {
+                            this.walkPath = neighborNode.createWalkPath();
+                            this.targetAction = new PlantSeedAction(node.pos);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (this.walkPath !== null) {
+            const offset = this.walkPath.getWalkOffset(this.pos);
+            if (offset !== null) {
+                this.walk(offset);
+            }
+        }
+    }
 }
 
 const getGridNode = (nodeGrid, pos) => {
     const index = getTileIndex(pos);
     return nodeGrid[index];
+};
+
+const getClosestNeighborNode = (nodeGrid, inputPos) => {
+    let closestNode = null;
+    const pos = new Pos(0, 0);
+    for (const offset of neighborOffsets) {
+        pos.set(inputPos);
+        pos.add(offset);
+        if (!posIsInWorld(pos)) {
+            continue;
+        }
+        const node = getGridNode(nodeGrid, pos);
+        if (node === null || node.pathCost === null) {
+            continue;
+        }
+        if (closestNode === null || node.pathCost < closestNode.pathCost) {
+            closestNode = node;
+        }
+    }
+    return closestNode;
+};
+
+const canPlantSeed = (inputPos) => {
+    if (!(getTile(true, inputPos) instanceof EmptyTile)) {
+        return false;
+    }
+    const pos = new Pos(0, 0);
+    for (let offsetY = -1; offsetY <= 1; offsetY++) {
+        for (let offsetX = -1; offsetX <= 1; offsetX++) {
+            pos.x = inputPos.x + offsetX;
+            pos.y = inputPos.y + offsetY;
+            if (getTile(true, pos) instanceof FlowerTile) {
+                return false;
+            }
+        }
+    }
+    return true;
+};
+
+const getOffsetToPos = (srcPos, destPos) => {
+    if (srcPos.x > destPos.x) {
+        return new Pos(-1, 0);
+    }
+    if (srcPos.x < destPos.x) {
+        return new Pos(1, 0);
+    }
+    if (srcPos.y > destPos.y) {
+        return new Pos(0, -1);
+    }
+    if (srcPos.y < destPos.y) {
+        return new Pos(0, 1);
+    }
+    return null;
 };
 
 

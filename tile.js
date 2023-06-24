@@ -297,6 +297,10 @@ export class PlayerTile extends EntityTile {
         }
     }
     
+    buildSproutTile(offset, isPoisonous, tier) {
+        this.buildTile(offset, () => this.createSproutTile(isPoisonous, tier));
+    }
+    
     removeTile(offset) {
         const pos = this.pos.copy();
         pos.add(offset);
