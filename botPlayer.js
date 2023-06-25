@@ -190,6 +190,14 @@ class TierPoisonStrategy extends PoisonStrategy {
     
 }
 
+class ReceivedPoison {
+    
+    constructor(creatorKey) {
+        this.creatorKey = creatorKey;
+        this.time = Date.now() / 1000;
+    }
+}
+
 export class BotPlayerTile extends PlayerTile {
     
     constructor(displayName) {
@@ -202,6 +210,7 @@ export class BotPlayerTile extends PlayerTile {
         this.planAge = 0;
         this.lastSeedPos = null;
         this.poisonStrategy = new PeriodicPoisonStrategy();
+        this.receivedPoisons = [];
     }
     
     timerEvent() {
@@ -209,6 +218,14 @@ export class BotPlayerTile extends PlayerTile {
         if (this.actDelay > 3) {
             this.act();
             this.actDelay = 0;
+        }
+    }
+    
+    poisonEvent(creatorTile) {
+        super.poisonEvent(creatorTile);
+        this.receivedPoisons.push(new ReceivedPoison(creatorTile.key));
+        while (this.receivedPoisons.length > 8) {
+            this.receivedPoisons.shift();
         }
     }
     
@@ -422,6 +439,25 @@ export class BotPlayerTile extends PlayerTile {
         }
     }
     
+    expectsPoison(flowerTile) {
+        const { creatorKey } = flowerTile;
+        if (creatorKey === this.key) {
+            return flowerTile.isPoisonous;
+        }
+        let lastPoisonTime = null;
+        for (let index = this.receivedPoisons.length - 1; index >= 0; index--) {
+            const poison = this.receivedPoisons[index];
+            if (poison.creatorKey !== creatorKey) {
+                continue;
+            }
+            if (lastPoisonTime === null || poison.time > lastPoisonTime) {
+                lastPoisonTime = poison.time;
+            }
+        }
+        const timeThreshold = Date.now() / 1000 - 5 * 60;
+        return (lastPoisonTime !== null && lastPoisonTime > timeThreshold);
+    }
+    
     getPosNextToPath() {
         const nextPathPos = this.walkPath.getNextStep().pos;
         const offset = neighborOffsets[Math.floor(Math.random() * neighborOffsets.length)];
@@ -499,7 +535,8 @@ export class BotPlayerTile extends PlayerTile {
         const unreachablePosList = [];
         let closestNode = null;
         for (const entity of entityTileSet) {
-            if (!(entity instanceof FlowerTile) || entity.isSprout()) {
+            if (!(entity instanceof FlowerTile) || entity.isSprout()
+                    || this.expectsPoison(entity)) {
                 continue;
             }
             const node = getGridNode(nodeGrid, entity.pos);
