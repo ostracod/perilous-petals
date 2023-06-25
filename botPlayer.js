@@ -116,9 +116,78 @@ class PlantSeedAction {
         }
         const offset = getOffsetToPos(bot.pos, this.pos);
         if (offset !== null) {
-            bot.buildSproutTile(offset, false, null);
+            bot.plantSeed(offset);
         }
     }
+}
+
+class PoisonStrategy {
+    
+    isPoisonPos(pos) {
+        return false;
+    }
+    
+    shouldPlantPoison(bot, pos) {
+        return this.isPoisonPos(pos);
+    }
+    
+    getPoisonTier() {
+        return null;
+    }
+    
+    plantEvent() {
+        // Do nothing.
+    }
+}
+
+class NeverPoisonStrategy extends PoisonStrategy {
+    
+}
+
+class PeriodicPoisonStrategy extends PoisonStrategy {
+    
+    constructor() {
+        super();
+        this.delay = 0;
+        this.maxDelay = 2;
+    }
+    
+    shouldPlantPoison(bot, pos) {
+        return (this.delay === 0);
+    }
+    
+    plantEvent() {
+        super.plantEvent();
+        this.delay += 1;
+        if (this.delay > this.maxDelay) {
+            this.delay = 0;
+        }
+    }
+}
+
+class PlayerPoisonStrategy extends PoisonStrategy {
+    // TODO: Implement.
+    
+}
+
+class BlockPoisonStrategy extends PoisonStrategy {
+    // TODO: Implement.
+    
+}
+
+class GrassPoisonStrategy extends PoisonStrategy {
+    // TODO: Implement.
+    
+}
+
+class DirectionPoisonStrategy extends PoisonStrategy {
+    // TODO: Implement.
+    
+}
+
+class TierPoisonStrategy extends PoisonStrategy {
+    // TODO: Implement.
+    
 }
 
 export class BotPlayerTile extends PlayerTile {
@@ -132,6 +201,7 @@ export class BotPlayerTile extends PlayerTile {
         this.targetAction = null;
         this.planAge = 0;
         this.lastSeedPos = null;
+        this.poisonStrategy = new PeriodicPoisonStrategy();
     }
     
     timerEvent() {
@@ -363,12 +433,29 @@ export class BotPlayerTile extends PlayerTile {
         return { pos, offset };
     }
     
+    plantSeed(offset) {
+        const pos = this.pos.copy();
+        pos.add(offset);
+        let isPoisonous;
+        let tier;
+        if (this.poisonStrategy.shouldPlantPoison(this, pos)) {
+            isPoisonous = true;
+            tier = this.poisonStrategy.getPoisonTier();
+        } else {
+            isPoisonous = false;
+            tier = null
+        }
+        console.log([isPoisonous, tier]);
+        this.buildSproutTile(offset, isPoisonous, tier);
+        this.poisonStrategy.plantEvent();
+    }
+    
     plantSeedNextToPath() {
         const result = this.getPosNextToPath();
         if (result === null || !canPlantSeed(result.pos)) {
             return false;
         }
-        this.buildSproutTile(result.offset, false, null);
+        this.plantSeed(result.offset);
         return true;
     }
     
