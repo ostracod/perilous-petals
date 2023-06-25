@@ -2,7 +2,7 @@
 import Heap from "heap";
 import { worldTilesLength } from "./constants.js";
 import { Pos } from "./pos.js";
-import { entityTileSet, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile } from "./tile.js";
+import { entityTileSet, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile, isWorldEdgePos, getCenterBlockCount } from "./tile.js";
 
 const neighborOffsets = [
     new Pos(-1, 0), new Pos(1, 0),
@@ -262,7 +262,6 @@ export class BotPlayerTile extends PlayerTile {
                 if (!pos.equals(this.lastSeedPos)) {
                     continue;
                 }
-                console.log("WOW");
                 const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
                 if (result !== null) {
                     return result;
@@ -312,18 +311,41 @@ export class BotPlayerTile extends PlayerTile {
         return this.planSeedAction(nodeGrid, visitedNodes, true);
     }
     
-    plantSeedNextToPath() {
+    getPosNextToPath() {
         const nextPathPos = this.walkPath.getNextStep().pos;
         const offset = neighborOffsets[Math.floor(Math.random() * neighborOffsets.length)];
         const pos = this.pos.copy();
         pos.add(offset);
         if (nextPathPos !== null && pos.equals(nextPathPos)) {
+            return null;
+        }
+        return { pos, offset };
+    }
+    
+    plantSeedNextToPath() {
+        const result = this.getPosNextToPath();
+        if (result === null || !canPlantSeed(result.pos)) {
             return false;
         }
-        if (!canPlantSeed(pos)) {
+        this.buildSproutTile(result.offset, false, null);
+        return true;
+    }
+    
+    placeBlockNextToPath() {
+        const result = this.getPosNextToPath();
+        if (result === null) {
             return false;
         }
-        this.buildSproutTile(offset, false, null);
+        const { pos, offset } = result;
+        if (isWorldEdgePos(pos)) {
+            return false;
+        }
+        const tile = getTile(true, pos);
+        if (!(tile instanceof EmptyTile)) {
+            return false;
+        }
+        const tier = Math.floor(Math.random() * this.getLevel());
+        this.buildBlockTile(offset, tier);
         return true;
     }
     
@@ -384,6 +406,12 @@ export class BotPlayerTile extends PlayerTile {
         this.planAge += 1;
         if (this.walkPath !== null) {
             if (Math.random() < 0.2) {
+                if (getCenterBlockCount() < 15) {
+                    const hasPlaced = this.placeBlockNextToPath();
+                    if (hasPlaced) {
+                        return;
+                    }
+                }
                 const hasPlanted = this.plantSeedNextToPath();
                 if (hasPlanted) {
                     return;

@@ -2,7 +2,7 @@
 import { gameUtils } from "ostracod-multiplayer";
 import * as commonUtils from "./commonUtils.js";
 import { Pos, readClientOffset } from "./pos.js";
-import { blockTiles, playerTileMap, HumanPlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent, getHumanPlayerKey } from "./tile.js";
+import { playerTileMap, HumanPlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent, getHumanPlayerKey } from "./tile.js";
 import { BotPlayerTile } from "./botPlayer.js";
 
 const getHumanPlayerTile = (player) => {
@@ -68,7 +68,7 @@ gameUtils.addCommandListener("placeBlock", true, (command, player, outputCommand
     const { offset, playerTile } = readOffsetCommand(command, player);
     const { tier } = command;
     if (offset !== null && playerTile.valueIsValidTier(tier)) {
-        playerTile.buildTile(offset, () => blockTiles[tier]);
+        playerTile.buildBlockTile(offset, tier);
     }
 });
 

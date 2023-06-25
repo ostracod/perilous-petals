@@ -18,6 +18,7 @@ export const entityTileSet = new Set();
 export const playerTileMap = new Map();
 let emptyForegroundTileCount = 0;
 let grassTileCount = 0;
+let centerBlockCount = 0;
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -37,7 +38,7 @@ class Tile {
         // Do nothing.
     }
     
-    deleteEvent(isForeground) {
+    deleteEvent(isForeground, pos) {
         // Do nothing.
     }
     
@@ -75,8 +76,8 @@ export class EmptyTile extends Tile {
         }
     }
     
-    deleteEvent(isForeground) {
-        super.deleteEvent(isForeground);
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
         if (isForeground) {
             emptyForegroundTileCount -= 1;
         }
@@ -105,8 +106,8 @@ class GrassTile extends Tile {
         grassTileCount += 1;
     }
     
-    deleteEvent(isForeground) {
-        super.deleteEvent(isForeground);
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
         grassTileCount -= 1;
     }
     
@@ -126,6 +127,20 @@ export class BlockTile extends Tile {
     constructor(tier) {
         super(tileTypeIds.block + tier);
         this.tier = tier;
+    }
+    
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
+        if (!isWorldEdgePos(pos)) {
+            centerBlockCount += 1;
+        }
+    }
+    
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
+        if (!isWorldEdgePos(pos)) {
+            centerBlockCount -= 1;
+        }
     }
     
     playerCanRemove() {
@@ -179,8 +194,8 @@ class EntityTile extends Tile {
         entityTileSet.add(this);
     }
     
-    deleteEvent(isForeground) {
-        super.deleteEvent(isForeground);
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
         entityTileSet.delete(this);
     }
     
@@ -214,8 +229,8 @@ export class PlayerTile extends EntityTile {
         playerTileMap.set(this.key, this);
     }
     
-    deleteEvent(isForeground) {
-        super.deleteEvent(isForeground);
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
         playerTileMap.delete(this.key);
     }
     
@@ -295,6 +310,10 @@ export class PlayerTile extends EntityTile {
             setTile(true, pos, tile);
             tile.playerBuildEvent(this);
         }
+    }
+    
+    buildBlockTile(offset, tier) {
+        this.buildTile(offset, () => blockTiles[tier]);
     }
     
     buildSproutTile(offset, isPoisonous, tier) {
@@ -629,7 +648,7 @@ const setTile = (isForeground, pos, tile) => {
         lastTypeId = null;
     } else {
         lastTypeId = lastTile.typeId;
-        lastTile.deleteEvent(isForeground);
+        lastTile.deleteEvent(isForeground, pos);
     }
     tiles[index] = tile;
     tile.addEvent(isForeground, pos);
@@ -772,5 +791,11 @@ export const tilesTimerEvent = () => {
 };
 
 export const getHumanPlayerKey = (username) => "human," + username;
+
+export const isWorldEdgePos = (pos) => (
+    pos.x <= 0 || pos.x >= worldSize - 1 || pos.y <= 0 || pos.y >= worldSize - 1
+);
+
+export const getCenterBlockCount = () => centerBlockCount;
 
 
