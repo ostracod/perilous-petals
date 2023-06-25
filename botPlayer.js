@@ -131,6 +131,7 @@ export class BotPlayerTile extends PlayerTile {
         this.walkPath = null;
         this.targetAction = null;
         this.planAge = 0;
+        this.lastSeedPos = null;
     }
     
     timerEvent() {
@@ -252,6 +253,36 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
+    selectSeedNeighbor(nodeGrid, seedPosList) {
+        if (this.lastSeedPos !== null) {
+            // Prefer planting seeds in a consistent position.
+            // This helps when the bot decides to re-plan.
+            for (let index = 0; index < seedPosList.length; index++) {
+                const pos = seedPosList[index];
+                if (!pos.equals(this.lastSeedPos)) {
+                    continue;
+                }
+                console.log("WOW");
+                const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+                if (result !== null) {
+                    return result;
+                }
+            }
+        }
+        const index = Math.floor(Math.random() * seedPosList.length);
+        const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+        if (result !== null) {
+            return result;
+        }
+        for (let index = 0; index < seedPosList.length; index++) {
+            const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+            if (result !== null) {
+                return result;
+            }
+        }
+        return null;
+    }
+    
     planSeedAction(nodeGrid, visitedNodes, isDestructive) {
         const seedPosList = [];
         for (const node of visitedNodes) {
@@ -265,12 +296,14 @@ export class BotPlayerTile extends PlayerTile {
         if (seedPosList.length <= 0) {
             return false;
         }
-        const result = selectSeedNeighbor(nodeGrid, seedPosList);
+        const result = this.selectSeedNeighbor(nodeGrid, seedPosList);
         if (result === null) {
             return false;
         }
-        this.walkPath = result.neighborNode.createWalkPath(isDestructive);
-        this.targetAction = new PlantSeedAction(result.pos);
+        const { neighborNode, pos } = result;
+        this.walkPath = neighborNode.createWalkPath(isDestructive);
+        this.targetAction = new PlantSeedAction(pos);
+        this.lastSeedPos = pos;
         return true;
     }
     
@@ -488,21 +521,6 @@ const selectSeedNeighborHelper = (nodeGrid, seedPosList, index) => {
     const pos = seedPosList[index];
     const neighborNode = getClosestNeighborNode(nodeGrid, pos);
     return (neighborNode === null) ? null : { pos, neighborNode };
-};
-
-const selectSeedNeighbor = (nodeGrid, seedPosList) => {
-    const index = Math.floor(Math.random() * seedPosList.length);
-    const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
-    if (result !== null) {
-        return result;
-    }
-    for (let index = 0; index < seedPosList.length; index++) {
-        const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
-        if (result !== null) {
-            return result;
-        }
-    }
-    return null;
 };
 
 const getOffsetToPos = (srcPos, destPos) => {
