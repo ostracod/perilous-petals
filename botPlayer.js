@@ -306,9 +306,50 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
+    planBlockDestruction(nodeGrid, visitedNodes) {
+        const blockNodes = [];
+        for (const node of visitedNodes) {
+            const tile = getTile(true, node.pos);
+            if (tile instanceof BlockTile) {
+                blockNodes.push(node);
+                if (blockNodes.length > 15) {
+                    break;
+                }
+            }
+        }
+        let bestNode = null;
+        let bestScore = -Infinity;
+        for (const node of blockNodes) {
+            let emptyNeighborCount = 0;
+            const pos = new Pos(0, 0);
+            for (const offset of clockwiseOffsets) {
+                pos.set(node.pos);
+                pos.add(offset);
+                if (!posIsInWorld(pos)) {
+                    continue;
+                }
+                const tile = getTile(true, pos);
+                if (!(tile instanceof BlockTile)) {
+                    emptyNeighborCount += 1;
+                }
+            }
+            const score = 2 * emptyNeighborCount - node.pathCost;
+            if (score > bestScore) {
+                bestNode = node;
+                bestScore = score;
+            }
+        }
+        if (bestNode !== null) {
+            this.walkPath = bestNode.createWalkPath(true);
+        }
+    }
+    
     makeDestructiveSeedPath() {
         const { nodeGrid, visitedNodes } = this.scanTiles(true);
-        return this.planSeedAction(nodeGrid, visitedNodes, true);
+        const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, true);
+        if (!hasPlanned) {
+            this.planBlockDestruction(nodeGrid, visitedNodes);
+        }
     }
     
     getPosNextToPath() {
@@ -383,6 +424,7 @@ export class BotPlayerTile extends PlayerTile {
                 closestNode = node;
             }
         }
+        
         // If we find unreachable flowers, destroy blocks to reach them.
         if (unreachablePosList.length > 0) {
             const hasMadePath = this.makeDestructiveFlowerPath(unreachablePosList);
