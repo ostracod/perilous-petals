@@ -26,6 +26,11 @@ export class Pos {
         this.y += pos.y;
     }
     
+    subtract(pos) {
+        this.x -= pos.x;
+        this.y -= pos.y;
+    }
+    
     toJson() {
         return { x: this.x, y: this.y };
     }
