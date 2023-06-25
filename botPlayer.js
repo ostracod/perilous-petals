@@ -171,8 +171,23 @@ class PlayerPoisonStrategy extends PoisonStrategy {
 }
 
 class BlockPoisonStrategy extends PoisonStrategy {
-    // TODO: Implement.
     
+    constructor() {
+        super();
+        this.nextToTile = true;
+    }
+    
+    isPoisonPos(inputPos) {
+        const pos = new Pos(0, 0);
+        for (const offset of neighborOffsets) {
+            pos.set(inputPos);
+            pos.add(offset);
+            if (getTileSafe(pos) instanceof BlockTile) {
+                return this.nextToTile;
+            }
+        }
+        return !this.nextToTile;
+    }
 }
 
 class GrassPoisonStrategy extends PoisonStrategy {
@@ -209,8 +224,9 @@ export class BotPlayerTile extends PlayerTile {
         this.targetAction = null;
         this.planAge = 0;
         this.lastSeedPos = null;
-        this.poisonStrategy = new PeriodicPoisonStrategy();
+        this.poisonStrategy = new BlockPoisonStrategy();
         this.receivedPoisons = [];
+        this.poisonRatio = null;
     }
     
     timerEvent() {
@@ -340,6 +356,46 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
+    updatePoisonRatio() {
+        let poisonCount = 0;
+        let totalCount = 0;
+        for (const entity of entityTileSet) {
+            if (entity instanceof FlowerTile && entity.creatorKey === this.key) {
+                if (entity.isPoisonous) {
+                    poisonCount += 1;
+                }
+                totalCount += 1;
+            }
+        }
+        this.poisonRatio = (totalCount < 3) ? null : poisonCount / totalCount;
+    }
+    
+    selectSeedNeighborHelper(nodeGrid, seedPosList) {
+        if (seedPosList.length <= 0) {
+            return null;
+        }
+        const endIndex = Math.min(seedPosList.length, 15);
+        const index = Math.floor(Math.random() * endIndex);
+        const result = selectNeighbor(nodeGrid, seedPosList[index]);
+        if (result !== null) {
+            return result;
+        }
+        for (let index = 0; index < seedPosList.length; index++) {
+            const result = selectNeighbor(nodeGrid, seedPosList[index]);
+            if (result !== null) {
+                return result;
+            }
+        }
+        return null;
+    }
+    
+    selectNeighborByPoison(nodeGrid, seedPosList, isPoisonous) {
+        const candidatePosList = seedPosList.filter((pos) => (
+            this.poisonStrategy.isPoisonPos(pos) === isPoisonous
+        ));
+        return this.selectSeedNeighborHelper(nodeGrid, candidatePosList)
+    }
+    
     selectSeedNeighbor(nodeGrid, seedPosList) {
         if (this.lastSeedPos !== null) {
             // Prefer planting seeds in a consistent position.
@@ -349,24 +405,26 @@ export class BotPlayerTile extends PlayerTile {
                 if (!pos.equals(this.lastSeedPos)) {
                     continue;
                 }
-                const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
+                const result = selectNeighbor(nodeGrid, seedPosList[index]);
                 if (result !== null) {
                     return result;
                 }
             }
         }
-        const index = Math.floor(Math.random() * seedPosList.length);
-        const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
-        if (result !== null) {
-            return result;
-        }
-        for (let index = 0; index < seedPosList.length; index++) {
-            const result = selectSeedNeighborHelper(nodeGrid, seedPosList, index);
-            if (result !== null) {
-                return result;
+        if (this.poisonRatio !== null) {
+            if (this.poisonRatio < 0.2) {
+                const result = this.selectNeighborByPoison(nodeGrid, seedPosList, true);
+                if (result !== null) {
+                    return result;
+                }
+            } else if (this.poisonRatio > 0.8) {
+                const result = this.selectNeighborByPoison(nodeGrid, seedPosList, false);
+                if (result !== null) {
+                    return result;
+                }
             }
         }
-        return null;
+        return this.selectSeedNeighborHelper(nodeGrid, seedPosList);
     }
     
     planSeedAction(nodeGrid, visitedNodes, isDestructive) {
@@ -374,7 +432,7 @@ export class BotPlayerTile extends PlayerTile {
         for (const node of visitedNodes) {
             if (canPlantSeed(node.pos)) {
                 seedPosList.push(node.pos);
-                if (seedPosList.length > 15) {
+                if (seedPosList.length > 100) {
                     break;
                 }
             }
@@ -412,11 +470,8 @@ export class BotPlayerTile extends PlayerTile {
             for (const offset of clockwiseOffsets) {
                 pos.set(node.pos);
                 pos.add(offset);
-                if (!posIsInWorld(pos)) {
-                    continue;
-                }
-                const tile = getTile(true, pos);
-                if (!(tile instanceof BlockTile)) {
+                const tile = getTileSafe(pos);
+                if (tile !== null && !(tile instanceof BlockTile)) {
                     emptyNeighborCount += 1;
                 }
             }
@@ -463,7 +518,7 @@ export class BotPlayerTile extends PlayerTile {
         const offset = neighborOffsets[Math.floor(Math.random() * neighborOffsets.length)];
         const pos = this.pos.copy();
         pos.add(offset);
-        if (nextPathPos !== null && pos.equals(nextPathPos)) {
+        if (!posIsInWorld(pos) || (nextPathPos !== null && pos.equals(nextPathPos))) {
             return null;
         }
         return { pos, offset };
@@ -562,6 +617,7 @@ export class BotPlayerTile extends PlayerTile {
         }
         
         // Find a good place to plant a seed.
+        this.updatePoisonRatio();
         const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, false);
         if (!hasPlanned) {
             this.makeDestructiveSeedPath();
@@ -614,6 +670,8 @@ export class BotPlayerTile extends PlayerTile {
     }
 }
 
+const getTileSafe = (pos) => posIsInWorld(pos) ? getTile(true, pos) : null;
+
 const getGridNode = (nodeGrid, pos) => {
     const index = getTileIndex(pos);
     return nodeGrid[index];
@@ -655,11 +713,7 @@ const canReachOffset = (inputPos, emptyIndex1, emptyIndex2) => {
         const offset = clockwiseOffsets[index % 8];
         pos.set(inputPos);
         pos.add(offset);
-        if (!posIsInWorld(pos)) {
-            return false;
-        }
-        const tile = getTile(true, pos);
-        if (tile instanceof BlockTile) {
+        if (getTileSafe(pos) instanceof BlockTile) {
             return false;
         }
     }
@@ -678,7 +732,7 @@ const canPlantSeed = (inputPos) => {
         for (let offsetX = -1; offsetX <= 1; offsetX++) {
             pos.x = inputPos.x + offsetX;
             pos.y = inputPos.y + offsetY;
-            if (getTile(true, pos) instanceof FlowerTile) {
+            if (getTileSafe(pos) instanceof FlowerTile) {
                 return false;
             }
         }
@@ -690,11 +744,8 @@ const canPlantSeed = (inputPos) => {
         const offset = clockwiseOffsets[index];
         pos.set(inputPos);
         pos.add(offset);
-        if (!posIsInWorld(pos)) {
-            continue;
-        }
-        const tile = getTile(true, pos);
-        if (!(tile instanceof BlockTile)) {
+        const tile = getTileSafe(pos);
+        if (tile !== null && !(tile instanceof BlockTile)) {
             emptyIndexes.push(index);
         }
     }
@@ -711,8 +762,7 @@ const canPlantSeed = (inputPos) => {
     return true;
 };
 
-const selectSeedNeighborHelper = (nodeGrid, seedPosList, index) => {
-    const pos = seedPosList[index];
+const selectNeighbor = (nodeGrid, pos) => {
     const neighborNode = getClosestNeighborNode(nodeGrid, pos);
     return (neighborNode === null) ? null : { pos, neighborNode };
 };
