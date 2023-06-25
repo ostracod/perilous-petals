@@ -94,7 +94,7 @@ export class EmptyTile extends Tile {
 
 const emptyTile = new EmptyTile();
 
-class GrassTile extends Tile {
+export class GrassTile extends Tile {
     
     constructor(texture) {
         super(tileTypeIds.grass + texture);
