@@ -168,7 +168,7 @@ class PeriodicPoisonStrategy extends PoisonStrategy {
     constructor(bot) {
         super(bot);
         this.delay = 0;
-        this.maxDelay = 2;
+        this.maxDelay = 1 + Math.floor(Math.random() * 5);
     }
     
     shouldPlantPoison(pos) {
@@ -188,7 +188,7 @@ class PlayerPoisonStrategy extends PoisonStrategy {
     
     constructor(bot) {
         super(bot);
-        this.closeToPlayer = true;
+        this.closeToPlayer = (Math.random() < 0.5);
     }
     
     isPoisonPos(pos) {
@@ -207,7 +207,7 @@ class BlockPoisonStrategy extends PoisonStrategy {
     
     constructor(bot) {
         super(bot);
-        this.nextToBlock = true;
+        this.nextToBlock = (Math.random() < 0.5);
     }
     
     isPoisonPos(inputPos) {
@@ -227,7 +227,7 @@ class GrassPoisonStrategy extends PoisonStrategy {
     
     constructor(bot) {
         super(bot);
-        this.nextToGrass = true;
+        this.nextToGrass = (Math.random() < 0.5);
     }
     
     isPoisonPos(inputPos) {
@@ -287,6 +287,15 @@ class TierPoisonStrategy extends PoisonStrategy {
     }
 }
 
+const poisonStrategyConstructors = [
+    PeriodicPoisonStrategy,
+    PlayerPoisonStrategy,
+    BlockPoisonStrategy,
+    GrassPoisonStrategy,
+    DirectionPoisonStrategy,
+    TierPoisonStrategy,
+];
+
 class ReceivedPoison {
     
     constructor(creatorKey) {
@@ -306,12 +315,14 @@ export class BotPlayerTile extends PlayerTile {
         this.targetAction = null;
         this.planAge = 0;
         this.lastSeedPos = null;
-        this.poisonStrategy = new TierPoisonStrategy(this);
+        this.poisonStrategy = new NeverPoisonStrategy(this);
         this.receivedPoisons = [];
         this.poisonRatio = null;
+        this.poisonRatioIsStale = true;
     }
     
     timerEvent() {
+        this.poisonRatioIsStale = true;
         this.actDelay += 1;
         if (this.actDelay > 3) {
             this.act();
@@ -325,6 +336,14 @@ export class BotPlayerTile extends PlayerTile {
         while (this.receivedPoisons.length > 8) {
             this.receivedPoisons.shift();
         }
+    }
+    
+    flowerRemovedEvent(flowerTile, playerTile) {
+        if (playerTile === this) {
+            return;
+        }
+        // TODO: Record flower removed.
+        
     }
     
     setFlip(offset) {
@@ -438,7 +457,10 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
-    updatePoisonRatio() {
+    getPoisonRatio() {
+        if (!this.poisonRatioIsStale) {
+            return this.poisonRatio;
+        }
         let poisonCount = 0;
         let totalCount = 0;
         for (const entity of entityTileSet) {
@@ -450,6 +472,8 @@ export class BotPlayerTile extends PlayerTile {
             }
         }
         this.poisonRatio = (totalCount < 3) ? null : poisonCount / totalCount;
+        this.poisonRatioIsStale = false;
+        return this.poisonRatio;
     }
     
     selectSeedNeighborHelper(nodeGrid, seedPosList) {
@@ -493,13 +517,14 @@ export class BotPlayerTile extends PlayerTile {
                 }
             }
         }
-        if (this.poisonRatio !== null) {
-            if (this.poisonRatio < this.poisonStrategy.getMinPoisonRatio()) {
+        const poisonRatio = this.getPoisonRatio();
+        if (poisonRatio !== null) {
+            if (poisonRatio < this.poisonStrategy.getMinPoisonRatio()) {
                 const result = this.selectNeighborByPoison(nodeGrid, seedPosList, true);
                 if (result !== null) {
                     return result;
                 }
-            } else if (this.poisonRatio > this.poisonStrategy.getMaxPoisonRatio()) {
+            } else if (poisonRatio > this.poisonStrategy.getMaxPoisonRatio()) {
                 const result = this.selectNeighborByPoison(nodeGrid, seedPosList, false);
                 if (result !== null) {
                     return result;
@@ -632,13 +657,14 @@ export class BotPlayerTile extends PlayerTile {
         if (!canPlantSeed(pos)) {
             return false;
         }
-        if (this.poisonRatio !== null) {
+        const poisonRatio = this.getPoisonRatio();
+        if (poisonRatio !== null) {
             const isPoisonous = this.poisonStrategy.shouldPlantPoison(pos);
-            if (this.poisonRatio < this.poisonStrategy.getMinPoisonRatio()) {
+            if (poisonRatio < this.poisonStrategy.getMinPoisonRatio()) {
                 if (!isPoisonous) {
                     return false;
                 }
-            } else if (this.poisonRatio > this.poisonStrategy.getMaxPoisonRatio()) {
+            } else if (poisonRatio > this.poisonStrategy.getMaxPoisonRatio()) {
                 if (isPoisonous) {
                     return false;
                 }
@@ -715,7 +741,6 @@ export class BotPlayerTile extends PlayerTile {
         }
         
         // Find a good place to plant a seed.
-        this.updatePoisonRatio();
         const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, false);
         if (!hasPlanned) {
             this.makeDestructiveSeedPath();

@@ -337,6 +337,10 @@ export class PlayerTile extends EntityTile {
         // Do nothing.
     }
     
+    flowerRemovedEvent(flowerTile, playerTile) {
+        // Do nothing.
+    }
+    
     persistEvent() {
         // Do nothing.
     }
@@ -512,7 +516,12 @@ export class FlowerTile extends EntityTile {
         if (this.isSprout()) {
             playerTile.decreaseScore(sproutRemovalPenalty);
             playerTile.incrementStat("sproutsDestroyed");
-        } else if (this.isPoisonous) {
+            return;
+        }
+        if (creatorTile !== null) {
+            creatorTile.flowerRemovedEvent(this, playerTile);
+        }
+        if (this.isPoisonous) {
             const pointAmount = playerTile.decreaseScore(poisonFlowerPenalty);
             playerTile.emote(playerEmotions.sad);
             if (isCreator) {
