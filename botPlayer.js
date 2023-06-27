@@ -14,6 +14,7 @@ const clockwiseOffsets = [
     new Pos(0, 1), new Pos(-1, 1),
     new Pos(-1, 0), new Pos(-1, -1),
 ];
+const maxRemovalAmount = 12;
 
 let nextBotId = 0;
 
@@ -125,6 +126,7 @@ class PoisonStrategy {
     
     constructor(bot) {
         this.bot = bot;
+        this.creationTime = Date.now() / 1000;
     }
     
     isPoisonPos(pos) {
@@ -304,6 +306,14 @@ class ReceivedPoison {
     }
 }
 
+class FlowerRemoval {
+    
+    constructor(isPoisonous) {
+        this.isPoisonous = isPoisonous;
+        this.time = Date.now() / 1000;
+    }
+}
+
 export class BotPlayerTile extends PlayerTile {
     
     constructor(displayName) {
@@ -317,8 +327,10 @@ export class BotPlayerTile extends PlayerTile {
         this.lastSeedPos = null;
         this.poisonStrategy = new NeverPoisonStrategy(this);
         this.receivedPoisons = [];
+        this.flowerRemovals = [];
         this.poisonRatio = null;
         this.poisonRatioIsStale = true;
+        this.updateStrategyDelay = 0;
     }
     
     timerEvent() {
@@ -342,8 +354,14 @@ export class BotPlayerTile extends PlayerTile {
         if (playerTile === this) {
             return;
         }
-        // TODO: Record flower removed.
-        
+        const timeThreshold = Date.now() / 1000 - 90;
+        if (this.poisonStrategy.creationTime > timeThreshold) {
+            return;
+        }
+        this.flowerRemovals.push(new FlowerRemoval(flowerTile.isPoisonous));
+        while (this.flowerRemovals.length > maxRemovalAmount) {
+            this.flowerRemovals.shift();
+        }
     }
     
     setFlip(offset) {
@@ -692,6 +710,35 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
+    updateStrategy() {
+        const currentTime = Date.now() / 1000;
+        let lastEventTime;
+        if (this.flowerRemovals.length > 0) {
+            lastEventTime = this.flowerRemovals.at(-1).time;
+        } else {
+            lastEventTime = this.poisonStrategy.creationTime;
+        }
+        if (lastEventTime < currentTime - 10 * 60) {
+            if (!(this.poisonStrategy instanceof NeverPoisonStrategy)) {
+                this.poisonStrategy = new NeverPoisonStrategy(this);
+            }
+            this.flowerRemovals = [];
+            return;
+        }
+        if (this.flowerRemovals.length < maxRemovalAmount) {
+            return;
+        }
+        for (const removal of this.flowerRemovals) {
+            if (removal.isPoisonous) {
+                return;
+            }
+        }
+        const index = Math.floor(Math.random() * poisonStrategyConstructors.length);
+        const strategyConstructor = poisonStrategyConstructors[index];
+        this.poisonStrategy = new strategyConstructor(this);
+        this.flowerRemovals = [];
+    }
+    
     shouldMakePlan() {
         if (this.planAge > 9) {
             return true;
@@ -793,6 +840,11 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     act() {
+        this.updateStrategyDelay += 1;
+        if (this.updateStrategyDelay > 5) {
+            this.updateStrategy();
+            this.updateStrategyDelay = 0;
+        }
         if (this.shouldMakePlan()) {
             this.makePlan();
         }
