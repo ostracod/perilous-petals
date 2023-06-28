@@ -817,21 +817,25 @@ export class BotPlayerTile extends PlayerTile {
                 }
             }
             const offset = this.walkPath.getWalkOffset(this.pos);
-            if (offset !== null) {
-                if (this.walkPath.isDestructive) {
-                    const pos = this.pos.copy();
-                    pos.add(offset);
-                    const tile = getTile(true, pos);
-                    if (tile instanceof BlockTile) {
-                        this.removeTile(offset);
-                        return;
-                    }
+            if (offset === null) {
+                return;
+            }
+            const pos = this.pos.copy();
+            pos.add(offset);
+            const tile = getTile(true, pos);
+            if (this.walkPath.isDestructive) {
+                if (tile instanceof BlockTile) {
+                    this.removeTile(offset);
+                    return;
                 }
-                this.walk(offset);
-                const hasFinished = this.walkPath.advance(this.pos);
-                if (hasFinished) {
-                    this.walkPath = null;
-                }
+            }
+            if (tile instanceof FlowerTile && this.expectsPoison(tile)) {
+                return
+            }
+            this.walk(offset);
+            const hasFinished = this.walkPath.advance(this.pos);
+            if (hasFinished) {
+                this.walkPath = null;
             }
         } else if (this.targetAction !== null) {
             this.targetAction.perform(this);
