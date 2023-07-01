@@ -769,6 +769,11 @@ export class BotPlayerTile extends PlayerTile {
         this.normalModeTime = Date.now() / 1000;
     }
     
+    getTargetPlayer() {
+        const playerTile = playerTileMap.get(this.targetPlayerKey);
+        return (typeof playerTile === "undefined") ? null : playerTile;
+    }
+    
     updatePlanMode() {
         this.planModeDelay += 1;
         if (this.planModeDelay < 6) {
@@ -805,7 +810,8 @@ export class BotPlayerTile extends PlayerTile {
                 }
             }
         } else if (this.planMode === planModes.visit) {
-            if (!playerTileMap.has(this.targetPlayerKey)) {
+            const playerTile = this.getTargetPlayer();
+            if (playerTile === null || getDistance(this.pos, playerTile.pos) < 3) {
                 this.startNormalPlanMode();
             }
         } else {
@@ -825,9 +831,6 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     makeNormalPlan() {
-        this.walkPath = null;
-        this.targetAction = null;
-        this.planAge = 0;
         
         // Find the shortest path to all reachable tiles.
         const { nodeGrid, visitedNodes } = this.scanTiles(false);
@@ -874,12 +877,32 @@ export class BotPlayerTile extends PlayerTile {
         
     }
     
+    planVisitPlayer(playerTile, isDestructive) {
+        const { nodeGrid } = this.scanTiles(isDestructive);
+        const node = getClosestNeighborNode(nodeGrid, playerTile.pos);
+        if (node === null) {
+            return false;
+        } else {
+            this.walkPath = node.createWalkPath(isDestructive);
+            return true;
+        }
+    }
+    
     makeVisitPlan() {
-        // TODO: Implement.
-        
+        const playerTile = this.getTargetPlayer();
+        if (playerTile === null) {
+            return;
+        }
+        const hasPlanned = this.planVisitPlayer(playerTile, false);
+        if (!hasPlanned) {
+            this.planVisitPlayer(playerTile, true);
+        }
     }
     
     makePlan() {
+        this.walkPath = null;
+        this.targetAction = null;
+        this.planAge = 0;
         if (this.planMode === planModes.normal) {
             this.makeNormalPlan();
         } else if (this.planMode === planModes.clear) {
@@ -904,9 +927,11 @@ export class BotPlayerTile extends PlayerTile {
                         return;
                     }
                 }
-                const hasPlanted = this.plantSeedNextToPath();
-                if (hasPlanted) {
-                    return;
+                if (this.planMode === planModes.normal) {
+                    const hasPlanted = this.plantSeedNextToPath();
+                    if (hasPlanted) {
+                        return;
+                    }
                 }
             }
             const offset = this.walkPath.getWalkOffset(this.pos);
@@ -989,7 +1014,8 @@ const canReachOffset = (inputPos, emptyIndex1, emptyIndex2) => {
         const offset = clockwiseOffsets[index % 8];
         pos.set(inputPos);
         pos.add(offset);
-        if (getTileSafe(pos) instanceof BlockTile) {
+        const tile = getTileSafe(pos);
+        if (tile === null || tile instanceof BlockTile) {
             return false;
         }
     }
