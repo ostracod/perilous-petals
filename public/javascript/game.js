@@ -6,7 +6,7 @@ const flowerNames = [
     "Carnation",
     "Hydrangea",
     "Iris",
-    "Petunia",
+    "Lotus",
     "Daisy",
     
     "Poppy",
@@ -360,8 +360,10 @@ const setLocalPlayerFlip = (offset) => {
         return;
     }
     localPlayerFlip = (offset.x < 0);
-    localPlayerTile.flip = localPlayerFlip;
-    localPlayerTile.redraw();
+    if (localPlayerTile !== null) {
+        localPlayerTile.flip = localPlayerFlip;
+        localPlayerTile.redraw();
+    }
 };
 
 const tryWalk = () => {
@@ -397,6 +399,9 @@ const startWalk = (offset) => {
 
 const buildInDirection = (offset) => {
     setLocalPlayerFlip(offset);
+    if (localPlayerTile === null) {
+        return;
+    }
     const pos = localPlayerTile.pos.copy();
     pos.add(offset);
     if (!posIsInWorld(pos)) {

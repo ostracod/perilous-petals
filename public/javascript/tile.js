@@ -152,7 +152,7 @@ class PlayerTile extends EntityTile {
             document.getElementById("level").innerHTML = this.level;
             document.getElementById("score").innerHTML = pluralize(this.score, "point");
             let nextLevelText;
-            if (this.level >= levelPointAmounts) {
+            if (this.level >= levelPointAmounts.length) {
                 nextLevelText = "(None)";
             } else {
                 const pointAmount = levelPointAmounts[this.level];

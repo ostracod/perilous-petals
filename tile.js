@@ -175,8 +175,8 @@ while (blockTiles.length < tierAmount) {
 // EntityTiles may only exist in foregroundTiles.
 class EntityTile extends Tile {
     
-    constructor(tileId) {
-        super(tileId);
+    constructor(typeId) {
+        super(typeId);
         this.pos = null;
     }
     
@@ -374,6 +374,7 @@ export class HumanPlayerTile extends PlayerTile {
         } else {
             this.stats = JSON.parse(statsText);
         }
+        this.changedStats = null;
         this.clearStatChanges();
     }
     
@@ -666,7 +667,7 @@ const setTile = (isForeground, pos, tile) => {
     }
     tiles[index] = tile;
     tile.addEvent(isForeground, pos);
-    const typeId = tile.typeId;
+    const { typeId } = tile;
     if (lastTypeId !== typeId) {
         new TileChange(isForeground, pos.copy(), typeId);
     }
@@ -745,7 +746,7 @@ export const encodeWorldTiles = () => {
         if (tile instanceof EmptyTile) {
             tile = backgroundTiles[index];
         }
-        const typeId = tile.typeId;
+        const { typeId } = tile;
         chars.push(String.fromCharCode(typeId + startTileChar));
     }
     return chars.join("");

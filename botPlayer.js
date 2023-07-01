@@ -267,7 +267,6 @@ class DirectionPoisonStrategy extends PoisonStrategy {
         offset.subtract(this.bot.pos);
         return offset.equals(this.offset);
     }
-    
 }
 
 class TierPoisonStrategy extends PoisonStrategy {
@@ -361,6 +360,7 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     flowerRemovedEvent(flowerTile, playerTile) {
+        super.flowerRemovedEvent(flowerTile, playerTile);
         if (playerTile === this) {
             return;
         }
@@ -436,7 +436,7 @@ export class BotPlayerTile extends PlayerTile {
                 if (!posIsInWorld(neighborPos)) {
                     continue;
                 }
-                let neighborNode = getGridNode(nodeGrid, neighborPos);
+                let neighborNode = getGridNode(nodeGrid, neighborPos, true);
                 if (neighborNode === null) {
                     neighborNode = new TileNode(neighborPos);
                     neighborNode.addToGrid(nodeGrid);
@@ -471,7 +471,7 @@ export class BotPlayerTile extends PlayerTile {
         let closestNode = null;
         for (const pos of unreachablePosList) {
             const node = getGridNode(nodeGrid, pos);
-            if (node === null || node.pathCost === null) {
+            if (node === null) {
                 continue;
             }
             if (closestNode === null || node.pathCost < closestNode.pathCost) {
@@ -514,8 +514,8 @@ export class BotPlayerTile extends PlayerTile {
         if (result !== null) {
             return result;
         }
-        for (let index = 0; index < seedPosList.length; index++) {
-            const result = selectNeighbor(nodeGrid, seedPosList[index]);
+        for (const pos of seedPosList) {
+            const result = selectNeighbor(nodeGrid, pos);
             if (result !== null) {
                 return result;
             }
@@ -527,19 +527,18 @@ export class BotPlayerTile extends PlayerTile {
         const candidatePosList = seedPosList.filter((pos) => (
             this.poisonStrategy.isPoisonPos(pos) === isPoisonous
         ));
-        return this.selectSeedNeighborHelper(nodeGrid, candidatePosList)
+        return this.selectSeedNeighborHelper(nodeGrid, candidatePosList);
     }
     
     selectSeedNeighbor(nodeGrid, seedPosList) {
         if (this.lastSeedPos !== null) {
             // Prefer planting seeds in a consistent position.
             // This helps when the bot decides to re-plan.
-            for (let index = 0; index < seedPosList.length; index++) {
-                const pos = seedPosList[index];
+            for (const pos of seedPosList) {
                 if (!pos.equals(this.lastSeedPos)) {
                     continue;
                 }
-                const result = selectNeighbor(nodeGrid, seedPosList[index]);
+                const result = selectNeighbor(nodeGrid, pos);
                 if (result !== null) {
                     return result;
                 }
@@ -586,7 +585,7 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
-    planBlockDestruction(nodeGrid, visitedNodes) {
+    planBlockDestruction(visitedNodes) {
         const blockNodes = [];
         for (const node of visitedNodes) {
             const tile = getTile(true, node.pos);
@@ -625,7 +624,7 @@ export class BotPlayerTile extends PlayerTile {
         const { nodeGrid, visitedNodes } = this.scanTiles(true);
         const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, true);
         if (!hasPlanned) {
-            this.planBlockDestruction(nodeGrid, visitedNodes);
+            this.planBlockDestruction(visitedNodes);
         }
     }
     
@@ -635,8 +634,7 @@ export class BotPlayerTile extends PlayerTile {
             return flowerTile.isPoisonous;
         }
         let lastPoisonTime = null;
-        for (let index = this.receivedPoisons.length - 1; index >= 0; index--) {
-            const poison = this.receivedPoisons[index];
+        for (const poison of this.receivedPoisons) {
             if (poison.creatorKey !== creatorKey) {
                 continue;
             }
@@ -649,7 +647,7 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     getPosNextToPath() {
-        const nextPathPos = this.walkPath.getNextStep().pos;
+        const nextPathPos = (this.walkPath === null) ? null : this.walkPath.getNextStep().pos;
         const offset = neighborOffsets[Math.floor(Math.random() * neighborOffsets.length)];
         const pos = this.pos.copy();
         pos.add(offset);
@@ -838,7 +836,7 @@ export class BotPlayerTile extends PlayerTile {
                 continue;
             }
             const node = getGridNode(nodeGrid, entity.pos);
-            if (node === null || node.pathCost === null) {
+            if (node === null) {
                 if (!entity.isSprout()) {
                     unreachablePosList.push(entity.pos);
                 }
@@ -990,9 +988,13 @@ export class BotPlayerTile extends PlayerTile {
 
 const getTileSafe = (pos) => posIsInWorld(pos) ? getTile(true, pos) : null;
 
-const getGridNode = (nodeGrid, pos) => {
+const getGridNode = (nodeGrid, pos, includeNullCost = false) => {
     const index = getTileIndex(pos);
-    return nodeGrid[index];
+    const node = nodeGrid[index];
+    if (node === null || (node.pathCost === null && !includeNullCost)) {
+        return null;
+    }
+    return node;
 };
 
 const getClosestNeighborNode = (nodeGrid, inputPos) => {
@@ -1005,7 +1007,7 @@ const getClosestNeighborNode = (nodeGrid, inputPos) => {
             continue;
         }
         const node = getGridNode(nodeGrid, pos);
-        if (node === null || node.pathCost === null) {
+        if (node === null) {
             continue;
         }
         if (closestNode === null || node.pathCost < closestNode.pathCost) {
@@ -1016,13 +1018,16 @@ const getClosestNeighborNode = (nodeGrid, inputPos) => {
 };
 
 const getTileCost = (tile, isDestructive) => {
+    if (tile instanceof EmptyTile) {
+        return 1;
+    }
     if (tile instanceof BlockTile) {
         return isDestructive ? 4 : null;
     }
     if (tile instanceof FlowerTile || tile instanceof PlayerTile) {
         return 30;
     }
-    return 1;
+    return null;
 };
 
 const canReachOffset = (inputPos, emptyIndex1, emptyIndex2) => {

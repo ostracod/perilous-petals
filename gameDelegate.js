@@ -1,7 +1,7 @@
 
 import { gameUtils } from "ostracod-multiplayer";
 import * as commonUtils from "./commonUtils.js";
-import { Pos, readClientOffset } from "./pos.js";
+import { readClientOffset } from "./pos.js";
 import { playerTileMap, HumanPlayerTile, initWorldTiles, writeWorldTiles, encodeWorldTiles, getWorldChanges, getLastWorldChangeId, tilesTimerEvent, getHumanPlayerKey } from "./tile.js";
 import { BotPlayerTile } from "./botPlayer.js";
 
@@ -113,7 +113,7 @@ class GameDelegate {
     
     async persistEvent() {
         writeWorldTiles();
-        for (let playerTile of playerTileMap.values()) {
+        for (const playerTile of playerTileMap.values()) {
             playerTile.persistEvent();
         }
     }
