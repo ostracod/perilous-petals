@@ -7,7 +7,7 @@ A multiplayer flower-based game by Jack Eisenmann
 
 This application has the following system-wide dependencies:
 
-* Node.js version ^16.4
+* Node.js version ^18.10
 * pnpm version ^8.6
 * MySQL version ^8.0
 
