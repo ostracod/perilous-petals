@@ -333,7 +333,7 @@ export class PlayerTile extends EntityTile {
         }
     }
     
-    poisonEvent(creatorTile) {
+    poisonEvent(creatorKey) {
         // Do nothing.
     }
     
@@ -533,7 +533,7 @@ export class FlowerTile extends EntityTile {
                     creatorTile.incrementStat("youSabotaged");
                 }
             }
-            playerTile.poisonEvent(creatorTile);
+            playerTile.poisonEvent(this.creatorKey);
         } else {
             const pointAmount = flowerPointAmounts[this.tier];
             playerTile.increaseScore(pointAmount);

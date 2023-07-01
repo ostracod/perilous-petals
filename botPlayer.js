@@ -15,6 +15,11 @@ const clockwiseOffsets = [
     new Pos(-1, 0), new Pos(-1, -1),
 ];
 const maxRemovalAmount = 12;
+const planModes = {
+    normal: 0,
+    clear: 1,
+    visit: 2,
+};
 
 let nextBotId = 0;
 
@@ -326,11 +331,16 @@ export class BotPlayerTile extends PlayerTile {
         this.planAge = 0;
         this.lastSeedPos = null;
         this.poisonStrategy = new NeverPoisonStrategy(this);
+        this.poisonStrategyDelay = 0;
         this.receivedPoisons = [];
         this.flowerRemovals = [];
         this.poisonRatio = null;
         this.poisonRatioIsStale = true;
-        this.updateStrategyDelay = 0;
+        this.planMode = null;
+        this.planModeDelay = 0;
+        this.normalModeTime = null;
+        this.targetPlayerKey = null;
+        this.startNormalPlanMode();
     }
     
     timerEvent() {
@@ -342,9 +352,9 @@ export class BotPlayerTile extends PlayerTile {
         }
     }
     
-    poisonEvent(creatorTile) {
-        super.poisonEvent(creatorTile);
-        this.receivedPoisons.push(new ReceivedPoison(creatorTile.key));
+    poisonEvent(creatorKey) {
+        super.poisonEvent(creatorKey);
+        this.receivedPoisons.push(new ReceivedPoison(creatorKey));
         while (this.receivedPoisons.length > 8) {
             this.receivedPoisons.shift();
         }
@@ -710,7 +720,12 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
-    updateStrategy() {
+    updatePoisonStrategy() {
+        this.poisonStrategyDelay += 1;
+        if (this.poisonStrategyDelay < 6) {
+            return;
+        }
+        this.poisonStrategyDelay = 0;
         const currentTime = Date.now() / 1000;
         let lastEventTime;
         if (this.flowerRemovals.length > 0) {
@@ -739,6 +754,66 @@ export class BotPlayerTile extends PlayerTile {
         this.flowerRemovals = [];
     }
     
+    getOpponentPlayers() {
+        const output = [];
+        for (const playerTile of playerTileMap.values()) {
+            if (playerTile !== this) {
+                output.push(playerTile);
+            }
+        }
+        return output;
+    }
+    
+    startNormalPlanMode() {
+        this.planMode = planModes.normal;
+        this.normalModeTime = Date.now() / 1000;
+    }
+    
+    updatePlanMode() {
+        this.planModeDelay += 1;
+        if (this.planModeDelay < 6) {
+            return;
+        }
+        this.planModeDelay = 0;
+        if (this.planMode === planModes.normal) {
+            const currentTime = Date.now() / 1000;
+            if (currentTime > this.normalModeTime + 10) {
+                const opponents = this.getOpponentPlayers();
+                if (opponents.length > 0) {
+                    this.planMode = planModes.clear;
+                } else {
+                    this.startNormalPlanMode();
+                }
+            }
+        } else if (this.planMode === planModes.clear) {
+            let flowerExists = false;
+            for (const entity of entityTileSet) {
+                if (entity instanceof FlowerTile && entity.creatorKey === this.key
+                        && !entity.isPoisonous) {
+                    flowerExists = true;
+                    break;
+                }
+            }
+            if (!flowerExists) {
+                const opponents = this.getOpponentPlayers();
+                if (opponents.length > 0) {
+                    const opponent = opponents[Math.floor(Math.random() * opponents.length)];
+                    this.targetPlayerKey = opponent.key;
+                    this.planMode = planModes.visit;
+                } else {
+                    this.startNormalPlanMode();
+                }
+            }
+        } else if (this.planMode === planModes.visit) {
+            if (!playerTileMap.has(this.targetPlayerKey)) {
+                this.startNormalPlanMode();
+            }
+        } else {
+            throw new Error(`Invalid plan mode: ${this.planMode}`);
+        }
+        console.log(this.planMode);
+    }
+    
     shouldMakePlan() {
         if (this.planAge > 9) {
             return true;
@@ -749,7 +824,7 @@ export class BotPlayerTile extends PlayerTile {
         return (this.targetAction === null);
     }
     
-    makePlanHelper() {
+    makeNormalPlan() {
         this.walkPath = null;
         this.targetAction = null;
         this.planAge = 0;
@@ -794,8 +869,26 @@ export class BotPlayerTile extends PlayerTile {
         }
     }
     
+    makeClearPlan() {
+        // TODO: Implement.
+        
+    }
+    
+    makeVisitPlan() {
+        // TODO: Implement.
+        
+    }
+    
     makePlan() {
-        this.makePlanHelper();
+        if (this.planMode === planModes.normal) {
+            this.makeNormalPlan();
+        } else if (this.planMode === planModes.clear) {
+            this.makeClearPlan();
+        } else if (this.planMode === planModes.visit) {
+            this.makeVisitPlan();
+        } else {
+            throw new Error(`Invalid plan mode: ${this.planMode}`);
+        }
         if (!(this.targetAction instanceof PlantSeedAction)) {
             this.lastSeedPos = null;
         }
@@ -844,11 +937,8 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     act() {
-        this.updateStrategyDelay += 1;
-        if (this.updateStrategyDelay > 5) {
-            this.updateStrategy();
-            this.updateStrategyDelay = 0;
-        }
+        this.updatePoisonStrategy();
+        this.updatePlanMode();
         if (this.shouldMakePlan()) {
             this.makePlan();
         }
