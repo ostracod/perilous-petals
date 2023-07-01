@@ -671,7 +671,6 @@ export class BotPlayerTile extends PlayerTile {
             isPoisonous = false;
             tier = null
         }
-        console.log([isPoisonous, tier]);
         this.buildSproutTile(offset, isPoisonous, tier);
         this.poisonStrategy.plantEvent();
     }
@@ -782,7 +781,7 @@ export class BotPlayerTile extends PlayerTile {
         this.planModeDelay = 0;
         if (this.planMode === planModes.normal) {
             const currentTime = Date.now() / 1000;
-            if (currentTime > this.normalModeTime + 10) {
+            if (currentTime > this.normalModeTime + 5 * 60) {
                 const opponents = this.getOpponentPlayers();
                 if (opponents.length > 0) {
                     this.planMode = planModes.clear;
@@ -817,7 +816,6 @@ export class BotPlayerTile extends PlayerTile {
         } else {
             throw new Error(`Invalid plan mode: ${this.planMode}`);
         }
-        console.log(this.planMode);
     }
     
     shouldMakePlan() {
@@ -830,51 +828,70 @@ export class BotPlayerTile extends PlayerTile {
         return (this.targetAction === null);
     }
     
-    makeNormalPlan() {
-        
-        // Find the shortest path to all reachable tiles.
-        const { nodeGrid, visitedNodes } = this.scanTiles(false);
-        
-        // Find the closest reachable flower.
+    planPickFlower(nodeGrid, shouldPickFlower, getFlowerScore) {
         const unreachablePosList = [];
-        let closestNode = null;
+        let bestNode = null;
+        let bestScore = -Infinity;
         for (const entity of entityTileSet) {
-            if (!(entity instanceof FlowerTile) || entity.isSprout()
-                    || this.expectsPoison(entity)) {
+            if (!(entity instanceof FlowerTile) || this.expectsPoison(entity)
+                    || !shouldPickFlower(entity)) {
                 continue;
             }
             const node = getGridNode(nodeGrid, entity.pos);
             if (node === null || node.pathCost === null) {
-                unreachablePosList.push(entity.pos);
+                if (!entity.isSprout()) {
+                    unreachablePosList.push(entity.pos);
+                }
                 continue;
             }
-            if (closestNode === null || node.pathCost < closestNode.pathCost) {
-                closestNode = node;
+            const score = getFlowerScore(entity, node.pathCost);
+            if (score > bestScore) {
+                bestNode = node;
+                bestScore = score;
             }
         }
-        
-        // If we find unreachable flowers, destroy blocks to reach them.
         if (unreachablePosList.length > 0) {
             const hasMadePath = this.makeDestructiveFlowerPath(unreachablePosList);
             if (hasMadePath) {
-                return;
+                return true;
             }
         }
-        if (closestNode !== null) {
-            this.walkPath = closestNode.createWalkPath(false);
+        if (bestNode !== null) {
+            this.walkPath = bestNode.createWalkPath(false);
+            return true;
+        }
+        return false;
+    }
+    
+    makeNormalPlan() {
+        const { nodeGrid, visitedNodes } = this.scanTiles(false);
+        let hasPlanned = this.planPickFlower(
+            nodeGrid,
+            (flowerTile) => !flowerTile.isSprout(),
+            (flowerTile, pathCost) => -pathCost,
+        );
+        if (hasPlanned) {
             return;
         }
-        
-        // Find a good place to plant a seed.
-        const hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, false);
+        hasPlanned = this.planSeedAction(nodeGrid, visitedNodes, false);
         if (!hasPlanned) {
             this.makeDestructiveSeedPath();
         }
     }
     
     makeClearPlan() {
-        // TODO: Implement.
-        
+        const { nodeGrid } = this.scanTiles(false);
+        this.planPickFlower(
+            nodeGrid,
+            (flowerTile) => (flowerTile.creatorKey === this.key),
+            (flowerTile, pathCost) => {
+                let output = -pathCost;
+                if (!flowerTile.isSprout()) {
+                    output += 1000;
+                }
+                return output;
+            },
+        );
     }
     
     planVisitPlayer(playerTile, isDestructive) {
