@@ -1,6 +1,6 @@
 
 import Heap from "heap";
-import { worldTilesLength } from "./constants.js";
+import { worldSize, worldTilesLength } from "./constants.js";
 import { Pos } from "./pos.js";
 import { entityTileSet, playerTileMap, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile, GrassTile, isWorldEdgePos, getCenterBlockCount } from "./tile.js";
 
@@ -340,6 +340,8 @@ export class BotPlayerTile extends PlayerTile {
         this.normalModeTime = null;
         this.targetPlayerKey = null;
         this.startNormalPlanMode();
+        this.trapCheckDelay = 0;
+        this.trapCount = 0;
     }
     
     timerEvent() {
@@ -419,7 +421,7 @@ export class BotPlayerTile extends PlayerTile {
         super.removeTile(offset);
     }
     
-    scanTiles(isDestructive) {
+    scanTilesHelper(getTileCost) {
         const firstNode = new TileNode(this.pos.copy(), null, 0);
         const nodeGrid = Array(worldTilesLength).fill(null);
         firstNode.addToGrid(nodeGrid);
@@ -444,7 +446,7 @@ export class BotPlayerTile extends PlayerTile {
                     continue;
                 }
                 const tile = getTile(true, neighborPos);
-                const tileCost = getTileCost(tile, isDestructive);
+                const tileCost = getTileCost(tile);
                 if (tileCost === null) {
                     continue;
                 }
@@ -462,6 +464,21 @@ export class BotPlayerTile extends PlayerTile {
             }
         }
         return { nodeGrid, visitedNodes };
+    }
+    
+    scanTiles(isDestructive) {
+        return this.scanTilesHelper((tile) => {
+            if (tile instanceof EmptyTile) {
+                return 1;
+            }
+            if (tile instanceof BlockTile) {
+                return isDestructive ? 4 : null;
+            }
+            if (tile instanceof FlowerTile || tile instanceof PlayerTile) {
+                return 30;
+            }
+            return null;
+        });
     }
     
     // unreachablePosList is a list of flower positions which
@@ -717,6 +734,44 @@ export class BotPlayerTile extends PlayerTile {
         return true;
     }
     
+    teleportRandomly() {
+        const pos = new Pos(0, 0);
+        let count = 0;
+        while (true) {
+            pos.x = Math.floor(Math.random() * worldSize);
+            pos.y = Math.floor(Math.random() * worldSize);
+            const tile = getTile(true, pos);
+            if (tile instanceof EmptyTile) {
+                break;
+            }
+            count += 1;
+            if (count > 100) {
+                return;
+            }
+        }
+        this.swapToPos(pos);
+        this.clearPlan();
+    }
+    
+    checkTrap() {
+        this.trapCheckDelay += 1;
+        if (this.trapCheckDelay < 20) {
+            return;
+        }
+        this.trapCheckDelay = 0;
+        const { visitedNodes } = this.scanTilesHelper((tile) => (
+            (tile instanceof PlayerTile && tile !== this) ? null : 1
+        ));
+        if (visitedNodes.length < 64) {
+            this.trapCount += 1;
+            if (this.trapCount > 3) {
+                this.teleportRandomly();
+            }
+        } else {
+            this.trapCount = 0;
+        }
+    }
+    
     updatePoisonStrategy() {
         this.poisonStrategyDelay += 1;
         if (this.poisonStrategyDelay < 6) {
@@ -914,10 +969,14 @@ export class BotPlayerTile extends PlayerTile {
         }
     }
     
-    makePlan() {
+    clearPlan() {
         this.walkPath = null;
         this.targetAction = null;
         this.planAge = 0;
+    }
+    
+    makePlan() {
+        this.clearPlan();
         if (this.planMode === planModes.normal) {
             this.makeNormalPlan();
         } else if (this.planMode === planModes.clear) {
@@ -977,6 +1036,7 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     act() {
+        this.checkTrap();
         this.updatePoisonStrategy();
         this.updatePlanMode();
         if (this.shouldMakePlan()) {
@@ -1015,19 +1075,6 @@ const getClosestNeighborNode = (nodeGrid, inputPos) => {
         }
     }
     return closestNode;
-};
-
-const getTileCost = (tile, isDestructive) => {
-    if (tile instanceof EmptyTile) {
-        return 1;
-    }
-    if (tile instanceof BlockTile) {
-        return isDestructive ? 4 : null;
-    }
-    if (tile instanceof FlowerTile || tile instanceof PlayerTile) {
-        return 30;
-    }
-    return null;
 };
 
 const canReachOffset = (inputPos, emptyIndex1, emptyIndex2) => {

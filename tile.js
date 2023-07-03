@@ -250,6 +250,10 @@ export class PlayerTile extends EntityTile {
         setTile(true, pos, this);
     }
     
+    swapToPos(pos) {
+        swapForegroundTiles(this.pos.copy(), pos);
+    }
+    
     walk(offset) {
         const nextPos = this.pos.copy();
         nextPos.add(offset);
@@ -263,7 +267,7 @@ export class PlayerTile extends EntityTile {
         if (nextTile.playerCanRemove()) {
             this.removeTile(offset);
         }
-        swapForegroundTiles(this.pos, nextPos);
+        this.swapToPos(nextPos);
         return true;
     }
     
