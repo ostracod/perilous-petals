@@ -99,16 +99,22 @@ class GameDelegate {
     }
     
     playerEnterEvent(player) {
+        let playerTile = getHumanPlayerTile(player);
+        if (typeof playerTile !== "undefined") {
+            return;
+        }
         if (player.extraFields.level === null) {
             player.extraFields.level = 1;
         }
-        const playerTile = new HumanPlayerTile(player);
+        playerTile = new HumanPlayerTile(player);
         playerTile.addToWorld();
     }
     
     playerLeaveEvent(player) {
         const playerTile = getHumanPlayerTile(player);
-        playerTile.deleteFromWorld();
+        if (typeof playerTile !== "undefined") {
+            playerTile.deleteFromWorld();
+        }
     }
     
     async persistEvent() {
