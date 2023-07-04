@@ -208,6 +208,10 @@ class EntityTile extends Tile {
         // Do nothing.
     }
     
+    swapToPos(pos) {
+        swapForegroundTiles(this.pos.copy(), pos);
+    }
+    
     deleteFromWorld() {
         setTile(true, this.pos, emptyTile);
     }
@@ -248,10 +252,6 @@ export class PlayerTile extends EntityTile {
             pos.y = Math.floor(Math.random() * worldSize);
         }
         setTile(true, pos, this);
-    }
-    
-    swapToPos(pos) {
-        swapForegroundTiles(this.pos.copy(), pos);
     }
     
     walk(offset) {
@@ -321,7 +321,13 @@ export class PlayerTile extends EntityTile {
     }
     
     buildSproutTile(offset, isPoisonous, tier) {
-        this.buildTile(offset, () => this.createSproutTile(isPoisonous, tier));
+        this.buildTile(offset, () => {
+            if (this.getScore() < sproutBuildCost) {
+                return new GeneratorTile();
+            } else {
+                return this.createSproutTile(isPoisonous, tier);
+            }
+        });
     }
     
     removeTile(offset) {
@@ -569,6 +575,17 @@ export class FlowerTile extends EntityTile {
     }
 }
 
+export class GeneratorTile extends EntityTile {
+    
+    constructor() {
+        super(tileTypeIds.generator);
+    }
+    
+    toDbJson() {
+        return { type: "generator" };
+    }
+}
+
 class WorldChange {
     // Concrete subclasses of WorldChange must implement these methods:
     // getTypeName, getJsonFields
@@ -641,6 +658,8 @@ const convertJsonToTile = (data) => {
         return grassTiles[data.texture];
     } else if (type === "flower") {
         return new FlowerTile(data);
+    } else if (type === "generator") {
+        return new GeneratorTile();
     }
     throw new Error(`Unrecognized tile type "${type}".`);
 };
@@ -682,19 +701,15 @@ const swapForegroundTiles = (pos1, pos2) => {
     const index2 = getTileIndex(pos2);
     const tile1 = foregroundTiles[index1];
     const tile2 = foregroundTiles[index2];
-    const lastTypeId1 = tile1.typeId;
-    const lastTypeId2 = tile2.typeId;
+    const typeId1 = tile1.typeId;
+    const typeId2 = tile2.typeId;
     foregroundTiles[index1] = tile2;
     foregroundTiles[index2] = tile1;
     tile1.moveEvent(pos2);
     tile2.moveEvent(pos1);
-    const typeId1 = tile1.typeId;
-    const typeId2 = tile1.typeId;
-    if (lastTypeId1 !== typeId2) {
-        new TileChange(isForeground, pos1.copy(), typeId2);
-    }
-    if (lastTypeId2 !== typeId1) {
-        new TileChange(isForeground, pos2.copy(), typeId1);
+    if (typeId1 !== typeId2) {
+        new TileChange(true, pos1.copy(), typeId2);
+        new TileChange(true, pos2.copy(), typeId1);
     }
 };
 

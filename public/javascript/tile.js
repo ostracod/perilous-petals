@@ -9,12 +9,15 @@ let tileTypeIds;
 let startTileChar;
 let levelPointAmounts;
 let playerEmotions;
+let sproutBuildCost;
+let sproutRemovalPenalty;
 
 let foregroundTiles;
 let backgroundTiles;
 let lastWorldChangeId = null;
 let hasLoadedTiles = false;
 let tileChanges = [];
+let generatorDelay = 0;
 
 // Map from tile type ID to Tile.
 const typeIdTileMap = new Map();
@@ -31,6 +34,7 @@ let localPlayerKey;
 let localPlayerFlip = false;
 // Map from player key to Emote.
 const playerEmoteMap = new Map();
+const generatorSet = new Set();
 
 class Tile {
     // Concrete subclasses of Tile must implement these methods:
@@ -39,6 +43,18 @@ class Tile {
     constructor(typeId) {
         this.typeId = typeId;
         this.sprite = null;
+    }
+    
+    addEvent(pos) {
+        // Do nothing.
+    }
+    
+    moveEvent(pos) {
+        // Do nothing.
+    }
+    
+    deleteEvent() {
+        // Do nothing.
     }
     
     playerCanRemove() {
@@ -130,18 +146,64 @@ class FlowerTile extends ForegroundTile {
 }
 
 class EntityTile extends ForegroundTile {
+    // Concrete subclasses of EntityTile must implement these methods:
+    // updateSprite
     
-    constructor(typeId, pos) {
+    constructor(typeId) {
         super(typeId);
-        this.pos = pos;
+        this.pos = null;
+    }
+    
+    addEvent(pos) {
+        super.addEvent(pos);
+        this.pos = pos.copy();
+    }
+    
+    moveEvent(pos) {
+        super.moveEvent(pos);
+        this.pos.set(pos);
+    }
+    
+    swapToPos(pos) {
+        swapForegroundTiles(this.pos.copy(), pos);
+    }
+    
+    redraw() {
+        const lastSprite = this.sprite;
+        this.updateSprite();
+        if (this.sprite !== lastSprite) {
+            drawTile(this.pos);
+        }
+    }
+}
+
+class GeneratorTile extends EntityTile {
+    
+    constructor() {
+        super(tileTypeIds.generator);
+        this.updateSprite();
+    }
+    
+    updateSprite() {
+        const index = Math.floor(generatorDelay / 5) % 2;
+        this.sprite = generatorSprites[index];
+    }
+    
+    addEvent(pos) {
+        super.addEvent(pos);
+        generatorSet.add(this);
+    }
+    
+    deleteEvent() {
+        super.deleteEvent();
+        generatorSet.delete(this);
     }
 }
 
 class PlayerTile extends EntityTile {
     
     constructor(data) {
-        const pos = createPosFromJson(data.pos);
-        super(tileTypeIds.empty, pos);
+        super(tileTypeIds.empty);
         this.key = data.key;
         this.displayName = data.displayName;
         this.level = data.level;
@@ -163,7 +225,8 @@ class PlayerTile extends EntityTile {
             this.flip = data.flip;
         }
         this.updateSprite();
-        setTile(true, this.pos, this, false);
+        const pos = createPosFromJson(data.pos);
+        setTile(true, pos, this);
         playerTileMap.set(this.key, this);
     }
     
@@ -176,14 +239,6 @@ class PlayerTile extends EntityTile {
             emotion = emote.emotion;
         }
         this.sprite = playerSprites[emotion * 2 + (this.flip ? 1 : 0)];
-    }
-    
-    redraw() {
-        const lastSprite = this.sprite;
-        this.updateSprite();
-        if (this.sprite !== lastSprite) {
-            drawTile(this.pos);
-        }
     }
     
     drawName() {
@@ -208,9 +263,10 @@ class PlayerTile extends EntityTile {
         if (!nextTile.playerCanWalkOn()) {
             return false;
         }
-        setTile(true, this.pos, emptyTile, false);
-        this.pos.set(nextPos);
-        setTile(true, this.pos, this, false);
+        if (!(nextTile instanceof EmptyTile)) {
+            setTile(true, nextPos, emptyTile);
+        }
+        this.swapToPos(nextPos);
         return true;
     }
 }
@@ -296,15 +352,45 @@ const getTile = (isForeground, pos) => {
     return getTiles(isForeground)[index];
 };
 
+const setTileHelper = (tiles, pos, index, tile) => {
+    const lastTile = tiles[index];
+    if (lastTile !== null) {
+        lastTile.deleteEvent();
+    }
+    tiles[index] = tile;
+    tile.addEvent(pos);
+};
+
 const setTile = (isForeground, pos, tile, recordChange = true) => {
     const index = getTileIndex(pos);
     const tiles = getTiles(isForeground);
     if (recordChange) {
-        const lastTile = tiles[index];
-        new TileChange(isForeground, pos.copy(), lastTile.typeId);
+        const lastTypeId = tiles[index].typeId;
+        if (lastTypeId !== tile.typeId) {
+            new TileChange(isForeground, pos.copy(), lastTypeId);
+        }
     }
-    tiles[index] = tile;
+    setTileHelper(tiles, pos, index, tile);
     drawTile(pos);
+};
+
+const swapForegroundTiles = (pos1, pos2) => {
+    const index1 = getTileIndex(pos1);
+    const index2 = getTileIndex(pos2);
+    const tile1 = foregroundTiles[index1];
+    const tile2 = foregroundTiles[index2];
+    const typeId1 = tile1.typeId;
+    const typeId2 = tile2.typeId;
+    foregroundTiles[index1] = tile2;
+    foregroundTiles[index2] = tile1;
+    tile1.moveEvent(pos2);
+    tile2.moveEvent(pos1);
+    if (typeId1 !== typeId2) {
+        new TileChange(true, pos1.copy(), typeId1);
+        new TileChange(true, pos2.copy(), typeId2);
+    }
+    drawTile(pos1);
+    drawTile(pos2);
 };
 
 const iterateWorldPos = (handle) => {
@@ -319,7 +405,13 @@ const iterateWorldPos = (handle) => {
     }
 };
 
-const convertTypeIdToTile = (typeId) => typeIdTileMap.get(typeId);
+const convertTypeIdToTile = (typeId) => {
+    if (typeId === tileTypeIds.generator) {
+        return new GeneratorTile();
+    } else {
+        return typeIdTileMap.get(typeId);
+    }
+};
 
 const setWorldTiles = (tileChars) => {
     iterateWorldPos((pos, index) => {
@@ -334,8 +426,8 @@ const setWorldTiles = (tileChars) => {
             tiles1 = backgroundTiles;
             tiles2 = foregroundTiles;
         }
-        tiles1[index] = tile;
-        tiles2[index] = emptyTile;
+        setTileHelper(tiles1, pos, index, tile);
+        setTileHelper(tiles2, pos, index, emptyTile);
         drawTile(pos);
     });
 };
@@ -364,5 +456,7 @@ const drawTile = (pos) => {
 };
 
 const getLocalPlayerLevel = () => (localPlayerTile === null) ? null : localPlayerTile.level;
+
+const getLocalPlayerScore = () => (localPlayerTile === null) ? null : localPlayerTile.score;
 
 

@@ -2,7 +2,7 @@
 import Heap from "heap";
 import { worldSize, worldTilesLength } from "./constants.js";
 import { Pos } from "./pos.js";
-import { entityTileSet, playerTileMap, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile, GrassTile, isWorldEdgePos, getCenterBlockCount } from "./tile.js";
+import { entityTileSet, playerTileMap, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile, GrassTile, GeneratorTile, isWorldEdgePos, getCenterBlockCount } from "./tile.js";
 
 const neighborOffsets = [
     new Pos(-1, 0), new Pos(1, 0),
@@ -391,7 +391,7 @@ export class BotPlayerTile extends PlayerTile {
     }
     
     getScore() {
-        return 0;
+        return 100;
     }
     
     increaseScore(amount) {
@@ -474,7 +474,8 @@ export class BotPlayerTile extends PlayerTile {
             if (tile instanceof BlockTile) {
                 return isDestructive ? 4 : null;
             }
-            if (tile instanceof FlowerTile || tile instanceof PlayerTile) {
+            if (tile instanceof FlowerTile || tile instanceof PlayerTile
+                    || tile instanceof GeneratorTile) {
                 return 30;
             }
             return null;

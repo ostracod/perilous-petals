@@ -15,12 +15,14 @@ const grassTypeId = 1;
 const blockTypeId = grassTypeId + grassTextureAmount;
 const sproutTypeId = blockTypeId + tierAmount;
 const flowerTypeId = sproutTypeId + sproutStageAmount;
+const generatorTypeId = flowerTypeId + tierAmount;
 export const tileTypeIds = {
     empty: 0,
     grass: grassTypeId,
     block: blockTypeId,
     sprout: sproutTypeId,
     flower: flowerTypeId,
+    generator: generatorTypeId,
 };
 export const startTileChar = 35;
 
@@ -45,6 +47,8 @@ export const clientConstants = {
     startTileChar,
     levelPointAmounts,
     playerEmotions,
+    sproutBuildCost,
+    sproutRemovalPenalty,
 };
 
 

@@ -153,7 +153,12 @@ class SproutBuildItem extends BuildItem {
     }
     
     getTile() {
-        return sproutTiles[0];
+        const score = getLocalPlayerScore();
+        if (score === null || score < sproutBuildCost) {
+            return new GeneratorTile();
+        } else {
+            return sproutTiles[0];
+        }
     }
     
     getCommandName() {
@@ -462,7 +467,7 @@ addCommandListener("setState", (command) => {
     const tileChars = command.worldTiles;
     if (typeof tileChars === "undefined") {
         for (const playerTile of playerTileMap.values()) {
-            setTile(true, playerTile.pos, emptyTile, false);
+            setTile(true, playerTile.pos, emptyTile);
         }
     } else {
         setWorldTiles(tileChars);
@@ -527,6 +532,8 @@ class ConstantsRequest extends AjaxRequest {
         startTileChar = data.startTileChar;
         levelPointAmounts = data.levelPointAmounts;
         playerEmotions = data.playerEmotions;
+        sproutBuildCost = data.sproutBuildCost;
+        sproutRemovalPenalty = data.sproutRemovalPenalty;
         worldPixelSize = worldSize * spriteSize;
         worldTilesLength = worldSize ** 2;
         this.callback();
@@ -581,6 +588,10 @@ class ClientDelegate {
         const emotes = Array.from(playerEmoteMap.values());
         for (const emote of emotes) {
             emote.timerEvent();
+        }
+        generatorDelay += 1;
+        for (const generator of generatorSet) {
+            generator.redraw();
         }
         if (bufferCanvasHasChanged) {
             context.imageSmoothingEnabled = false;

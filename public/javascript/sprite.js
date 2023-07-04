@@ -34,6 +34,7 @@ const playerPalettes = [
 const grassPalette = [new Color(136, 161, 129), null];
 const seedPalette = [new Color(133, 71, 0), null];
 const sproutPalette = [new Color(0, 97, 0), null];
+const generatorPalette = [new Color(64, 64, 64), new Color(192, 192, 192)];
 const tierPalettes = [
     [new Color(255, 0, 0), new Color(255, 192, 192)],
     [new Color(255, 128, 0), new Color(255, 224, 192)],
@@ -71,10 +72,12 @@ const blockSpriteSets = [];
 const sproutSpriteSets = [];
 const flowerSpriteSets = [];
 const playerSpriteSets = [];
+const generatorSpriteSets = [];
 
 const sproutSprites = [];
 const flowerSprites = [];
 const playerSprites = [];
+let generatorSprites = [];
 
 class SpriteSet {
     
@@ -188,6 +191,8 @@ const initializeSpriteSets = () => {
         blockSpriteSets.push(new SpriteSet(24 + variation, palettes, false));
         flowerSpriteSets.push(new SpriteSet(16 + variation, palettes, false));
     }
+    generatorSpriteSets.push(new SpriteSet(40, [generatorPalette], false));
+    generatorSpriteSets.push(new SpriteSet(41, [generatorPalette], false));
 };
 
 const initializeSpriteSheet = (done) => {
@@ -244,6 +249,7 @@ const initializeSprites = () => {
             flowerSprites.push(new Sprite(flowerSpriteSet, paletteIndex));
         }
     }
+    generatorSprites = generatorSpriteSets.map((spriteSet) => new Sprite(spriteSet, 0));
 };
 
 const initializeBufferCanvas = () => {
