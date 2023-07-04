@@ -279,27 +279,21 @@ export class PlayerTile extends EntityTile {
         return (commonUtils.isValidInt(value) && value >= 0 && value < this.getLevel());
     }
     
-    createSproutTile(isPoisonous, tier) {
-        if (tier === null) {
-            const intArray = new Uint32Array(1);
-            crypto.getRandomValues(intArray)
-            const randomInt = intArray[0];
-            let mask = 1;
-            for (tier = 0; tier < tierAmount - 1; tier++) {
-                if (randomInt & mask) {
-                    break;
-                }
-                mask <<= 1;
+    getRandomTier() {
+        const intArray = new Uint32Array(1);
+        crypto.getRandomValues(intArray);
+        const randomInt = intArray[0];
+        let mask = 1;
+        let tier = 0;
+        while (tier < tierAmount - 1) {
+            if (randomInt & mask) {
+                break;
             }
-            tier = Math.min(tier, this.getLevel() - 1);
+            mask <<= 1;
+            tier += 1;
         }
-        return new FlowerTile({
-            creatorKey: this.key,
-            isPoisonous,
-            tier,
-            age: 0,
-            growthDelay: 50 + Math.floor(50 * Math.random()),
-        });
+        return Math.min(tier, this.getLevel() - 1);
+        
     }
     
     buildTile(offset, getBuildTile) {
@@ -320,12 +314,23 @@ export class PlayerTile extends EntityTile {
         this.buildTile(offset, () => blockTiles[tier]);
     }
     
+    createGeneratorTile(nextTileData) {
+        return new GeneratorTile({
+            creatorKey: this.key,
+            age: 0,
+            nextTile: nextTileData,
+        });
+    }
+    
     buildSproutTile(offset, isPoisonous, tier) {
         this.buildTile(offset, () => {
+            if (tier === null) {
+                tier = this.getRandomTier();
+            }
             if (this.getScore() < sproutBuildCost) {
-                return new GeneratorTile();
+                return this.createGeneratorTile({ type: "sprout", isPoisonous, tier });
             } else {
-                return this.createSproutTile(isPoisonous, tier);
+                return createSproutTile(this.key, isPoisonous, tier);
             }
         });
     }
@@ -337,10 +342,18 @@ export class PlayerTile extends EntityTile {
             return;
         }
         const lastTile = getTile(true, pos);
-        if (lastTile.playerCanRemove()) {
-            lastTile.playerRemoveEvent(this);
-            setTile(true, pos, emptyTile);
+        if (!lastTile.playerCanRemove()) {
+            return;
         }
+        let tile;
+        if (lastTile instanceof FlowerTile && lastTile.isSprout()
+                && this.getScore() < sproutRemovalPenalty) {
+            tile = this.createGeneratorTile({ type: "empty" });
+        } else {
+            tile = emptyTile;
+        }
+        lastTile.playerRemoveEvent(this);
+        setTile(true, pos, tile);
     }
     
     poisonEvent(creatorKey) {
@@ -577,12 +590,48 @@ export class FlowerTile extends EntityTile {
 
 export class GeneratorTile extends EntityTile {
     
-    constructor() {
+    constructor(data) {
         super(tileTypeIds.generator);
+        this.creatorKey = data.creatorKey;
+        this.age = data.age;
+        this.nextTileData = data.nextTile;
+    }
+    
+    timerEvent() {
+        super.timerEvent();
+        this.age += 1;
+        if (this.age > 20) {
+            this.generateTile();
+        }
+    }
+    
+    generateTile() {
+        const { type } = this.nextTileData;
+        if (type === "sprout") {
+            const tile = createSproutTile(
+                this.creatorKey,
+                this.nextTileData.isPoisonous,
+                this.nextTileData.tier,
+            );
+            setTile(true, this.pos, tile);
+            const creatorTile = playerTileMap.get(this.creatorKey);
+            if (typeof creatorTile !== "undefined") {
+                tile.playerBuildEvent(creatorTile);
+            }
+        } else if (type === "empty") {
+            setTile(true, this.pos, emptyTile);
+        } else {
+            throw new Error(`Invalid generator tile type "${type}".`);
+        }
     }
     
     toDbJson() {
-        return { type: "generator" };
+        return {
+            type: "generator",
+            creatorKey: this.creatorKey,
+            age: this.age,
+            nextTile: this.nextTileData,
+        };
     }
 }
 
@@ -659,7 +708,7 @@ const convertJsonToTile = (data) => {
     } else if (type === "flower") {
         return new FlowerTile(data);
     } else if (type === "generator") {
-        return new GeneratorTile();
+        return new GeneratorTile(data);
     }
     throw new Error(`Unrecognized tile type "${type}".`);
 };
@@ -831,5 +880,13 @@ export const isWorldEdgePos = (pos) => (
 );
 
 export const getCenterBlockCount = () => centerBlockCount;
+
+const createSproutTile = (creatorKey, isPoisonous, tier) => new FlowerTile({
+    creatorKey,
+    age: 0,
+    isPoisonous,
+    tier,
+    growthDelay: 50 + Math.floor(50 * Math.random()),
+});
 
 

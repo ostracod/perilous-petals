@@ -402,6 +402,16 @@ const startWalk = (offset) => {
     tryWalk();
 };
 
+const getRemovalTile = (pos) => {
+    const tile = getTile(true, pos);
+    const score = getLocalPlayerScore();
+    if (tile instanceof SproutTile && score < sproutRemovalPenalty) {
+        return new GeneratorTile();
+    } else {
+        return emptyTile;
+    }
+}
+
 const buildInDirection = (offset) => {
     setLocalPlayerFlip(offset);
     if (localPlayerTile === null) {
@@ -414,7 +424,8 @@ const buildInDirection = (offset) => {
     }
     const lastTile = getTile(true, pos);
     if (lastTile.playerCanRemove()) {
-        setTile(true, pos, emptyTile);
+        const tile = getRemovalTile(pos);
+        setTile(true, pos, tile);
         gameUpdateCommandList.push({
             commandName: "removeTile",
             offset: offset.toJson(),
@@ -508,7 +519,8 @@ addCommandRepeater("removeTile", (command) => {
     }
     const lastTile = getTile(true, pos);
     if (lastTile.playerCanRemove()) {
-        setTile(true, pos, emptyTile);
+        const tile = getRemovalTile(pos);
+        setTile(true, pos, tile);
     }
 });
 
