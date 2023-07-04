@@ -227,6 +227,7 @@ export class PlayerTile extends EntityTile {
         this.displayName = displayName;
         this.flip = false;
         this.generatorTile = null;
+        this.poisonStunDelay = 0;
     }
     
     addEvent(isForeground, pos) {
@@ -237,6 +238,13 @@ export class PlayerTile extends EntityTile {
     deleteEvent(isForeground, pos) {
         super.deleteEvent(isForeground, pos);
         playerTileMap.delete(this.key);
+    }
+    
+    timerEvent() {
+        super.timerEvent();
+        if (this.poisonStunDelay > 0) {
+            this.poisonStunDelay -= 1;
+        }
     }
     
     addToWorld() {
@@ -256,7 +264,7 @@ export class PlayerTile extends EntityTile {
     }
     
     isStunned() {
-        return (this.generatorTile !== null);
+        return (this.generatorTile !== null || this.poisonStunDelay > 0);
     }
     
     walk(offset) {
@@ -395,6 +403,7 @@ export class PlayerTile extends EntityTile {
             pos: this.pos.toJson(),
             flip: this.flip,
             isStunned: this.isStunned(),
+            poisonStunDelay: this.poisonStunDelay,
         }
     }
 }
@@ -561,6 +570,9 @@ export class FlowerTile extends EntityTile {
             creatorTile.flowerRemovedEvent(this, playerTile);
         }
         if (this.isPoisonous) {
+            if (playerTile.getScore() < poisonFlowerPenalty) {
+                playerTile.poisonStunDelay = 24;
+            }
             const pointAmount = playerTile.decreaseScore(poisonFlowerPenalty);
             playerTile.emote(playerEmotions.sad);
             if (isCreator) {
@@ -615,7 +627,7 @@ export class GeneratorTile extends EntityTile {
     timerEvent() {
         super.timerEvent();
         this.age += 1;
-        if (this.age > 20) {
+        if (this.age > 12) {
             this.generateTile();
         }
     }

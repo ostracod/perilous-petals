@@ -225,6 +225,7 @@ class PlayerTile extends EntityTile {
             this.flip = data.flip;
         }
         this.isStunned = data.isStunned;
+        this.poisonStunDelay = data.poisonStunDelay;
         this.updateSprite();
         const pos = createPosFromJson(data.pos);
         setTile(true, pos, this);
@@ -232,12 +233,16 @@ class PlayerTile extends EntityTile {
     }
     
     updateSprite() {
-        const emote = playerEmoteMap.get(this.key);
         let emotion;
-        if (typeof emote === "undefined") {
-            emotion = playerEmotions.neutral;
+        if (this.poisonStunDelay > 0) {
+            emotion = playerEmotions.sad;
         } else {
-            emotion = emote.emotion;
+            const emote = playerEmoteMap.get(this.key);
+            if (typeof emote === "undefined") {
+                emotion = playerEmotions.neutral;
+            } else {
+                emotion = emote.emotion;
+            }
         }
         this.sprite = playerSprites[emotion * 2 + (this.flip ? 1 : 0)];
     }
