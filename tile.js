@@ -226,6 +226,7 @@ export class PlayerTile extends EntityTile {
         this.key = key;
         this.displayName = displayName;
         this.flip = false;
+        this.generatorTile = null;
     }
     
     addEvent(isForeground, pos) {
@@ -254,7 +255,14 @@ export class PlayerTile extends EntityTile {
         setTile(true, pos, this);
     }
     
+    isStunned() {
+        return (this.generatorTile !== null);
+    }
+    
     walk(offset) {
+        if (this.isStunned()) {
+            return false;
+        }
         const nextPos = this.pos.copy();
         nextPos.add(offset);
         if (!posIsInWorld(nextPos)) {
@@ -297,6 +305,9 @@ export class PlayerTile extends EntityTile {
     }
     
     buildTile(offset, getBuildTile) {
+        if (this.isStunned()) {
+            return;
+        }
         const pos = this.pos.copy();
         pos.add(offset);
         if (!posIsInWorld(pos)) {
@@ -336,6 +347,9 @@ export class PlayerTile extends EntityTile {
     }
     
     removeTile(offset) {
+        if (this.isStunned()) {
+            return;
+        }
         const pos = this.pos.copy();
         pos.add(offset);
         if (!posIsInWorld(pos)) {
@@ -380,6 +394,7 @@ export class PlayerTile extends EntityTile {
             score: this.getScore(),
             pos: this.pos.toJson(),
             flip: this.flip,
+            isStunned: this.isStunned(),
         }
     }
 }
@@ -605,6 +620,27 @@ export class GeneratorTile extends EntityTile {
         }
     }
     
+    addEvent(isForeground, pos) {
+        super.addEvent(isForeground, pos);
+        const creatorTile = this.getCreatorTile();
+        if (creatorTile !== null) {
+            creatorTile.generatorTile = this;
+        }
+    }
+    
+    deleteEvent(isForeground, pos) {
+        super.deleteEvent(isForeground, pos);
+        const creatorTile = this.getCreatorTile();
+        if (creatorTile !== null && creatorTile.generatorTile === this) {
+            creatorTile.generatorTile = null;
+        }
+    }
+    
+    getCreatorTile() {
+        const playerTile = playerTileMap.get(this.creatorKey);
+        return (typeof playerTile === "undefined") ? null : playerTile;
+    }
+    
     generateTile() {
         const { type } = this.nextTileData;
         if (type === "sprout") {
@@ -614,8 +650,8 @@ export class GeneratorTile extends EntityTile {
                 this.nextTileData.tier,
             );
             setTile(true, this.pos, tile);
-            const creatorTile = playerTileMap.get(this.creatorKey);
-            if (typeof creatorTile !== "undefined") {
+            const creatorTile = this.getCreatorTile();
+            if (creatorTile !== null) {
                 tile.playerBuildEvent(creatorTile);
             }
         } else if (type === "empty") {

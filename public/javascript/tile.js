@@ -224,6 +224,7 @@ class PlayerTile extends EntityTile {
         } else {
             this.flip = data.flip;
         }
+        this.isStunned = data.isStunned;
         this.updateSprite();
         const pos = createPosFromJson(data.pos);
         setTile(true, pos, this);

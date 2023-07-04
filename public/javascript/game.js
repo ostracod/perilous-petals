@@ -110,6 +110,12 @@ class BuildItem {
         this.hotbarTag.innerHTML = text;
     }
     
+    buildTile(pos) {
+        const tile = this.getTile();
+        setTile(true, pos, tile);
+        updateLocalPlayerStun(tile);
+    }
+    
     getBaseCommand() {
         return {
             commandName: this.getCommandName(),
@@ -372,9 +378,11 @@ const setLocalPlayerFlip = (offset) => {
 };
 
 const tryWalk = () => {
+    if (localPlayerTile === null || localPlayerTile.isStunned) {
+        return;
+    }
     setLocalPlayerFlip(walkOffset);
-    if ((walkOffset.x === 0 && walkOffset.y === 0)
-            || localPlayerTile === null || walkDelay > 0) {
+    if ((walkOffset.x === 0 && walkOffset.y === 0) || walkDelay > 0) {
         return;
     }
     const hasWalked = localPlayerTile.walk(walkOffset);
@@ -402,21 +410,30 @@ const startWalk = (offset) => {
     tryWalk();
 };
 
-const getRemovalTile = (pos) => {
-    const tile = getTile(true, pos);
-    const score = getLocalPlayerScore();
-    if (tile instanceof SproutTile && score < sproutRemovalPenalty) {
-        return new GeneratorTile();
-    } else {
-        return emptyTile;
+const updateLocalPlayerStun = (placedTile) => {
+    if (placedTile instanceof GeneratorTile) {
+        localPlayerTile.isStunned = true;
     }
+};
+
+const removeTile = (pos) => {
+    const lastTile = getTile(true, pos);
+    const score = getLocalPlayerScore();
+    let tile;
+    if (lastTile instanceof SproutTile && score < sproutRemovalPenalty) {
+        tile = new GeneratorTile();
+    } else {
+        tile = emptyTile;
+    }
+    setTile(true, pos, tile);
+    updateLocalPlayerStun(tile);
 }
 
 const buildInDirection = (offset) => {
-    setLocalPlayerFlip(offset);
-    if (localPlayerTile === null) {
+    if (localPlayerTile === null || localPlayerTile.isStunned) {
         return;
     }
+    setLocalPlayerFlip(offset);
     const pos = localPlayerTile.pos.copy();
     pos.add(offset);
     if (!posIsInWorld(pos)) {
@@ -424,15 +441,13 @@ const buildInDirection = (offset) => {
     }
     const lastTile = getTile(true, pos);
     if (lastTile.playerCanRemove()) {
-        const tile = getRemovalTile(pos);
-        setTile(true, pos, tile);
+        removeTile(pos);
         gameUpdateCommandList.push({
             commandName: "removeTile",
             offset: offset.toJson(),
         });
     } else if (lastTile instanceof EmptyTile) {
-        const tile = selectedBuildItem.getTile();
-        setTile(true, pos, tile);
+        selectedBuildItem.buildTile(pos);
         selectedBuildItem.sendCommand(offset);
     }
 };
@@ -462,8 +477,7 @@ const repeatBuildItem = (command) => {
     const lastTile = getTile(true, pos);
     if (lastTile instanceof EmptyTile) {
         const buildItem = getBuildItemByCommand(command);
-        const tile = buildItem.getTile();
-        setTile(true, pos, tile);
+        buildItem.buildTile(pos);
     }
 };
 
@@ -519,8 +533,7 @@ addCommandRepeater("removeTile", (command) => {
     }
     const lastTile = getTile(true, pos);
     if (lastTile.playerCanRemove()) {
-        const tile = getRemovalTile(pos);
-        setTile(true, pos, tile);
+        removeTile(pos);
     }
 });
 
