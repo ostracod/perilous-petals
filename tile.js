@@ -92,7 +92,7 @@ export class EmptyTile extends Tile {
     }
 }
 
-const emptyTile = new EmptyTile();
+export const emptyTile = new EmptyTile();
 
 export class GrassTile extends Tile {
     
@@ -774,7 +774,7 @@ export const getTile = (isForeground, pos) => {
     return getTiles(isForeground)[index];
 };
 
-const setTile = (isForeground, pos, tile) => {
+export const setTile = (isForeground, pos, tile) => {
     const tiles = getTiles(isForeground);
     const index = getTileIndex(pos);
     const lastTile = tiles[index];
@@ -810,7 +810,7 @@ const swapForegroundTiles = (pos1, pos2) => {
     }
 };
 
-const iterateWorldPos = (handle) => {
+export const iterateWorldPos = (handle) => {
     const pos = new Pos(0, 0);
     for (let index = 0; index < worldTilesLength; index++) {
         handle(pos, index);
@@ -847,11 +847,13 @@ export const initWorldTiles = () => {
     }
 };
 
+export const getTilesDbJson = () => ({
+    foreground: foregroundTiles.map((tile) => tile.toDbJson()),
+    background: backgroundTiles.map((tile) => tile.toDbJson()),
+});
+
 export const writeWorldTiles = () => {
-    const data = {
-        foreground: foregroundTiles.map((tile) => tile.toDbJson()),
-        background: backgroundTiles.map((tile) => tile.toDbJson()),
-    };
+    const data = getTilesDbJson();
     fs.writeFileSync(worldTilesPath, JSON.stringify(data));
 };
 

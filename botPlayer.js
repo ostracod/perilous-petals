@@ -1,8 +1,10 @@
 
+import * as fs from "fs";
+import * as pathUtils from "path";
 import Heap from "heap";
-import { worldSize, worldTilesLength } from "./constants.js";
+import { worldSize, worldTilesLength, incidentsPath } from "./constants.js";
 import { Pos } from "./pos.js";
-import { entityTileSet, playerTileMap, posIsInWorld, getTileIndex, getTile, EmptyTile, BlockTile, FlowerTile, PlayerTile, GrassTile, GeneratorTile, isWorldEdgePos, getCenterBlockCount } from "./tile.js";
+import { entityTileSet, playerTileMap, posIsInWorld, iterateWorldPos, getTileIndex, getTile, setTile, EmptyTile, emptyTile, BlockTile, FlowerTile, PlayerTile, GrassTile, GeneratorTile, isWorldEdgePos, getCenterBlockCount, getTilesDbJson } from "./tile.js";
 
 const neighborOffsets = [
     new Pos(-1, 0), new Pos(1, 0),
@@ -22,6 +24,7 @@ const planModes = {
 };
 
 let nextBotId = 0;
+let botPlayerTile;
 
 class TileNode {
     
@@ -204,9 +207,11 @@ class PlayerPoisonStrategy extends PoisonStrategy {
                 continue;
             }
             const distance = getDistance(pos, playerTile.pos);
-            return ((distance < 4) === this.closeToPlayer);
+            if (distance < 4) {
+                return this.closeToPlayer;
+            }
         }
-        return false;
+        return !this.closeToPlayer;
     }
 }
 
@@ -1023,7 +1028,7 @@ export class BotPlayerTile extends PlayerTile {
                 }
             }
             if (tile instanceof FlowerTile && this.expectsPoison(tile)) {
-                return
+                return;
             }
             this.walk(offset);
             const hasFinished = this.walkPath.advance(this.pos);
@@ -1158,5 +1163,52 @@ const getOffsetToPos = (srcPos, destPos) => {
 const getDistance = (pos1, pos2) => (
     Math.max(Math.abs(pos1.x - pos2.x), Math.abs(pos1.y - pos2.y))
 );
+
+export const addBotToWorld = () => {
+    botPlayerTile = new BotPlayerTile("bot");
+    botPlayerTile.addToWorld();
+};
+
+export const checkWorldBot = () => {
+    for (const playerTile of playerTileMap.values()) {
+        if (playerTile === botPlayerTile) {
+            return;
+        }
+    }
+    console.log("Bot is missing!");
+    const residuePosList = [];
+    iterateWorldPos((pos) => {
+        const tile = getTile(true, pos);
+        if (tile === botPlayerTile) {
+            setTile(true, pos, emptyTile);
+            residuePosList.push(pos.copy());
+        }
+    });
+    if (!fs.existsSync(incidentsPath)) {
+        fs.mkdirSync(incidentsPath);
+    }
+    const timestamp = Date.now() / 1000;
+    const incidentPath = pathUtils.join(incidentsPath, `incident_${Math.round(timestamp)}.json`);
+    const playersData = Array.from(playerTileMap.values()).map((playerTile) => ({
+        key: playerTile.key,
+        pos: playerTile.pos.toJson(),
+    }));
+    const botData = {};
+    for (const name in botPlayerTile) {
+        botData[name] = String(botPlayerTile[name]);
+    }
+    botData.pos = botPlayerTile.pos.toJson();
+    botData.poisonStrategy = botPlayerTile.poisonStrategy.constructor.name;
+    const incidentData = {
+        timestamp,
+        residuePosList: residuePosList.map((pos) => pos.toJson()),
+        players: playersData,
+        bot: botData,
+        tiles: getTilesDbJson(),
+    };
+    fs.writeFileSync(incidentPath, JSON.stringify(incidentData));
+    console.log("Created incident file: " + incidentPath);
+    addBotToWorld();
+};
 
 

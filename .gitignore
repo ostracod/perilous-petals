@@ -2,3 +2,4 @@ node_modules
 databaseConfig.json
 sessionSecret.txt
 worldTiles.json
+incidents

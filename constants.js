@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 
 export const projectPath = pathUtils.dirname(fileURLToPath(import.meta.url));
 export const worldTilesPath = pathUtils.join(projectPath, "worldTiles.json");
+export const incidentsPath = pathUtils.join(projectPath, "incidents");
 
 export const worldSize = 26;
 export const worldTilesLength = worldSize ** 2;
