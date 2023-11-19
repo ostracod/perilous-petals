@@ -918,7 +918,11 @@ const growGrass = () => {
 export const tilesTimerEvent = () => {
     const entityTiles = Array.from(entityTileSet);
     for (const entityTile of entityTiles) {
-        entityTile.timerEvent();
+        // Ensure that we do not call `timerEvent` on an entity
+        // after the entity hass been removed from the world.
+        if (entityTileSet.has(entityTile)) {
+            entityTile.timerEvent();
+        }
     }
     growGrass();
 };
